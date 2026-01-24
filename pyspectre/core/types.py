@@ -1,0 +1,630 @@
+"""Core symbolic types for PySpectre.
+This module defines the symbolic type system that bridges Python's dynamic
+typing with Z3's static typing. Each Python value is represented as a
+union of possible Z3 types with type discriminators.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Union
+
+import z3
+
+if TYPE_CHECKING:
+    pass
+_sym_counter = 0
+
+
+def _fresh_name(prefix: str) -> str:
+    """Generate a unique symbolic variable name."""
+    global _sym_counter
+    _sym_counter += 1
+    return f"{prefix}_{_sym_counter}"
+
+
+class SymbolicType(ABC):
+    """Abstract base class for all symbolic types."""
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Human-readable name for debugging."""
+
+    @abstractmethod
+    def to_z3(self) -> z3.ExprRef:
+        """Convert to primary Z3 expression."""
+
+    @abstractmethod
+    def could_be_truthy(self) -> z3.BoolRef:
+        """Z3 expression for when this value is truthy."""
+
+    @abstractmethod
+    def could_be_falsy(self) -> z3.BoolRef:
+        """Z3 expression for when this value is falsy."""
+
+
+@dataclass
+class SymbolicNone(SymbolicType):
+    """Represents Python None."""
+
+    _name: str = field(default_factory=lambda: _fresh_name("none"))
+
+    @property
+    def name(self) -> str:
+        return "None"
+
+    def to_z3(self) -> z3.ExprRef:
+        return z3.BoolVal(False)
+
+    def could_be_truthy(self) -> z3.BoolRef:
+        return z3.BoolVal(False)
+
+    def could_be_falsy(self) -> z3.BoolRef:
+        return z3.BoolVal(True)
+
+    def __repr__(self) -> str:
+        return "SymbolicNone()"
+
+
+@dataclass
+class SymbolicValue(SymbolicType):
+    """Union type representing an integer or boolean symbolic value.
+    Attributes:
+        _name: Debugging name
+        z3_int: Z3 integer expression
+        is_int: Z3 boolean - True if this is an integer
+        z3_bool: Z3 boolean expression
+        is_bool: Z3 boolean - True if this is a boolean
+    """
+
+    _name: str
+    z3_int: z3.ArithRef
+    is_int: z3.BoolRef
+    z3_bool: z3.BoolRef
+    is_bool: z3.BoolRef
+    is_path: z3.BoolRef = field(default_factory=lambda: z3.BoolVal(False))
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def to_z3(self) -> z3.ExprRef:
+        return self.z3_int
+
+    def could_be_truthy(self) -> z3.BoolRef:
+        return z3.Or(
+            z3.And(self.is_bool, self.z3_bool),
+            z3.And(self.is_int, self.z3_int != 0),
+            self.is_path,
+        )
+
+    def could_be_falsy(self) -> z3.BoolRef:
+        return z3.Or(
+            z3.And(self.is_bool, z3.Not(self.z3_bool)),
+            z3.And(self.is_int, self.z3_int == 0),
+            z3.Not(self.is_path),
+        )
+
+    @staticmethod
+    def symbolic(name: str) -> tuple[SymbolicValue, z3.BoolRef]:
+        """Create a fresh symbolic value with type constraint."""
+        z3_int = z3.Int(f"{name}_int")
+        z3_bool = z3.Bool(f"{name}_bool")
+        is_int = z3.Bool(f"{name}_is_int")
+        is_bool = z3.Bool(f"{name}_is_bool")
+        is_path = z3.Bool(f"{name}_is_path")
+        type_constraint = z3.And(
+            z3.Or(is_int, is_bool, is_path),
+            z3.Not(z3.And(is_int, is_bool)),
+            z3.Not(z3.And(is_int, is_path)),
+            z3.Not(z3.And(is_bool, is_path)),
+        )
+        return SymbolicValue(name, z3_int, is_int, z3_bool, is_bool, is_path), type_constraint
+
+    @staticmethod
+    def from_const(value: object) -> SymbolicValue:
+        """Create a concrete symbolic value from a Python constant."""
+        if value is None:
+            return SymbolicValue(
+                _name="None",
+                z3_int=z3.IntVal(0),
+                is_int=z3.BoolVal(False),
+                z3_bool=z3.BoolVal(False),
+                is_bool=z3.BoolVal(False),
+                is_path=z3.BoolVal(False),
+            )
+        if isinstance(value, bool):
+            return SymbolicValue(
+                _name=str(value),
+                z3_int=z3.IntVal(1 if value else 0),
+                is_int=z3.BoolVal(False),
+                z3_bool=z3.BoolVal(value),
+                is_bool=z3.BoolVal(True),
+                is_path=z3.BoolVal(False),
+            )
+        if isinstance(value, int):
+            return SymbolicValue(
+                _name=str(value),
+                z3_int=z3.IntVal(value),
+                is_int=z3.BoolVal(True),
+                z3_bool=z3.BoolVal(False),
+                is_bool=z3.BoolVal(False),
+                is_path=z3.BoolVal(False),
+            )
+        return SymbolicValue(
+            _name=str(value),
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+            is_path=z3.BoolVal(False),
+        )
+
+    @staticmethod
+    def symbolic_path(name: str) -> tuple[SymbolicValue, z3.BoolRef]:
+        """Create a fresh symbolic path."""
+        val, constraint = SymbolicValue.symbolic(name)
+        path_constraint = z3.And(constraint, val.is_path)
+        return val, path_constraint
+
+    def __add__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}+{other._name})",
+            z3_int=self.z3_int + other.z3_int,
+            is_int=z3.And(self.is_int, other.is_int),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def __sub__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}-{other._name})",
+            z3_int=self.z3_int - other.z3_int,
+            is_int=z3.And(self.is_int, other.is_int),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def __mul__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}*{other._name})",
+            z3_int=self.z3_int * other.z3_int,
+            is_int=z3.And(self.is_int, other.is_int),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def __neg__(self) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"(-{self._name})",
+            z3_int=-self.z3_int,
+            is_int=self.is_int,
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def __mod__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}%{other._name})",
+            z3_int=self.z3_int % other.z3_int,
+            is_int=z3.And(self.is_int, other.is_int),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def __floordiv__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}//{other._name})",
+            z3_int=self.z3_int / other.z3_int,
+            is_int=z3.And(self.is_int, other.is_int),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+            is_path=z3.BoolVal(False),
+        )
+
+    def __truediv__(self, other: SymbolicValue) -> SymbolicValue:
+        is_path = self.is_path
+        return SymbolicValue(
+            _name=f"({self._name}/{other._name})",
+            z3_int=self.z3_int / other.z3_int,
+            is_int=z3.And(self.is_int, other.is_int),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+            is_path=is_path,
+        )
+
+    def __pow__(self, other: SymbolicValue) -> SymbolicValue:
+        fresh, _ = SymbolicValue.symbolic(f"{self._name}**{other._name}")
+        return fresh
+
+    def __eq__(self, other: object) -> SymbolicValue:
+        if not isinstance(other, SymbolicValue):
+            return SymbolicValue.from_const(False)
+        int_eq = z3.And(self.is_int, other.is_int, self.z3_int == other.z3_int)
+        bool_eq = z3.And(self.is_bool, other.is_bool, self.z3_bool == other.z3_bool)
+        result_bool = z3.Or(int_eq, bool_eq)
+        return SymbolicValue(
+            _name=f"({self._name}=={other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=result_bool,
+            is_bool=z3.BoolVal(True),
+        )
+
+    def __ne__(self, other: object) -> SymbolicValue:
+        if not isinstance(other, SymbolicValue):
+            return SymbolicValue.from_const(True)
+        eq = self.__eq__(other)
+        return SymbolicValue(
+            _name=f"({self._name}!={other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=z3.Not(eq.z3_bool),
+            is_bool=z3.BoolVal(True),
+        )
+
+    def __lt__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}<{other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=self.z3_int < other.z3_int,
+            is_bool=z3.And(self.is_int, other.is_int),
+        )
+
+    def __le__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}<={other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=self.z3_int <= other.z3_int,
+            is_bool=z3.And(self.is_int, other.is_int),
+        )
+
+    def __gt__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}>{other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=self.z3_int > other.z3_int,
+            is_bool=z3.And(self.is_int, other.is_int),
+        )
+
+    def __ge__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}>={other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=self.z3_int >= other.z3_int,
+            is_bool=z3.And(self.is_int, other.is_int),
+        )
+
+    def __and__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}&{other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=z3.And(self.z3_bool, other.z3_bool),
+            is_bool=z3.And(self.is_bool, other.is_bool),
+        )
+
+    def __or__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}|{other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=z3.Or(self.z3_bool, other.z3_bool),
+            is_bool=z3.And(self.is_bool, other.is_bool),
+        )
+
+    def __xor__(self, other: SymbolicValue) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"({self._name}^{other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=z3.Xor(self.z3_bool, other.z3_bool),
+            is_bool=z3.And(self.is_bool, other.is_bool),
+        )
+
+    def __invert__(self) -> SymbolicValue:
+        return SymbolicValue(
+            _name=f"(~{self._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=z3.Not(self.z3_bool),
+            is_bool=self.is_bool,
+        )
+
+    def logical_not(self) -> SymbolicValue:
+        """Python 'not' operator."""
+        return SymbolicValue(
+            _name=f"(not {self._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=z3.Not(self.could_be_truthy()),
+            is_bool=z3.BoolVal(True),
+        )
+
+    def __repr__(self) -> str:
+        return f"SymbolicValue({self._name})"
+
+
+@dataclass
+class SymbolicString(SymbolicType):
+    """Symbolic string using Z3 string theory.
+    Attributes:
+        _name: Debugging name
+        z3_str: Z3 string expression
+        z3_len: Z3 integer for string length
+    """
+
+    _name: str
+    z3_str: z3.SeqRef
+    z3_len: z3.ArithRef
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def to_z3(self) -> z3.ExprRef:
+        return self.z3_str
+
+    def could_be_truthy(self) -> z3.BoolRef:
+        return self.z3_len > 0
+
+    def could_be_falsy(self) -> z3.BoolRef:
+        return self.z3_len == 0
+
+    @staticmethod
+    def symbolic(name: str) -> tuple[SymbolicString, z3.BoolRef]:
+        """Create a fresh symbolic string."""
+        z3_str = z3.String(f"{name}_str")
+        z3_len = z3.Length(z3_str)
+        constraint = z3_len >= 0
+        return SymbolicString(name, z3_str, z3_len), constraint
+
+    @staticmethod
+    def from_const(value: str) -> SymbolicString:
+        """Create a concrete symbolic string."""
+        z3_str = z3.StringVal(value)
+        z3_len = z3.IntVal(len(value))
+        return SymbolicString(repr(value), z3_str, z3_len)
+
+    def __add__(self, other: SymbolicString) -> SymbolicString:
+        """String concatenation."""
+        return SymbolicString(
+            _name=f"({self._name}+{other._name})",
+            z3_str=z3.Concat(self.z3_str, other.z3_str),
+            z3_len=self.z3_len + other.z3_len,
+        )
+
+    def __getitem__(self, index: SymbolicValue) -> SymbolicString:
+        """String indexing - returns single character string."""
+        return SymbolicString(
+            _name=f"{self._name}[{index._name}]",
+            z3_str=z3.SubString(self.z3_str, index.z3_int, z3.IntVal(1)),
+            z3_len=z3.IntVal(1),
+        )
+
+    def substring(self, start: SymbolicValue, length: SymbolicValue) -> SymbolicString:
+        """Extract substring."""
+        return SymbolicString(
+            _name=f"{self._name}[{start._name}:{start._name}+{length._name}]",
+            z3_str=z3.SubString(self.z3_str, start.z3_int, length.z3_int),
+            z3_len=length.z3_int,
+        )
+
+    def contains(self, other: SymbolicString) -> SymbolicValue:
+        """Check if string contains another string."""
+        result = z3.Contains(self.z3_str, other.z3_str)
+        return SymbolicValue(
+            _name=f"({other._name} in {self._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=result,
+            is_bool=z3.BoolVal(True),
+        )
+
+    def index_of(self, other: SymbolicString) -> SymbolicValue:
+        """Find index of substring."""
+        idx = z3.IndexOf(self.z3_str, other.z3_str, z3.IntVal(0))
+        return SymbolicValue(
+            _name=f"{self._name}.index({other._name})",
+            z3_int=idx,
+            is_int=z3.BoolVal(True),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def length(self) -> SymbolicValue:
+        """Get string length."""
+        return SymbolicValue(
+            _name=f"len({self._name})",
+            z3_int=self.z3_len,
+            is_int=z3.BoolVal(True),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def __eq__(self, other: object) -> SymbolicValue:
+        if not isinstance(other, SymbolicString):
+            return SymbolicValue.from_const(False)
+        return SymbolicValue(
+            _name=f"({self._name}=={other._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=self.z3_str == other.z3_str,
+            is_bool=z3.BoolVal(True),
+        )
+
+    def __repr__(self) -> str:
+        return f"SymbolicString({self._name})"
+
+
+@dataclass
+class SymbolicList(SymbolicType):
+    """Symbolic list using Z3 arrays and explicit length tracking.
+    Attributes:
+        _name: Debugging name
+        z3_array: Z3 array from Int to symbolic elements
+        z3_len: Z3 integer for list length
+        element_type: String describing the element type
+    """
+
+    _name: str
+    z3_array: z3.ArrayRef
+    z3_len: z3.ArithRef
+    element_type: str = "int"
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def to_z3(self) -> z3.ExprRef:
+        return self.z3_array
+
+    def could_be_truthy(self) -> z3.BoolRef:
+        return self.z3_len > 0
+
+    def could_be_falsy(self) -> z3.BoolRef:
+        return self.z3_len == 0
+
+    @staticmethod
+    def symbolic(name: str, element_type: str = "int") -> tuple[SymbolicList, z3.BoolRef]:
+        """Create a fresh symbolic list."""
+        z3_array = z3.Array(f"{name}_arr", z3.IntSort(), z3.IntSort())
+        z3_len = z3.Int(f"{name}_len")
+        constraint = z3_len >= 0
+        return SymbolicList(name, z3_array, z3_len, element_type), constraint
+
+    @staticmethod
+    def from_const(values: list[int]) -> SymbolicList:
+        """Create a concrete symbolic list from integers."""
+        name = _fresh_name("list")
+        z3_array = z3.Array(f"{name}_arr", z3.IntSort(), z3.IntSort())
+        for i, v in enumerate(values):
+            z3_array = z3.Store(z3_array, i, v)
+        z3_len = z3.IntVal(len(values))
+        return SymbolicList(str(values), z3_array, z3_len)
+
+    def __getitem__(self, index: SymbolicValue) -> SymbolicValue:
+        """List indexing."""
+        elem = z3.Select(self.z3_array, index.z3_int)
+        return SymbolicValue(
+            _name=f"{self._name}[{index._name}]",
+            z3_int=elem,
+            is_int=z3.BoolVal(True),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def __setitem__(self, index: SymbolicValue, value: SymbolicValue) -> SymbolicList:
+        """List assignment - returns new list (immutable semantics)."""
+        new_array = z3.Store(self.z3_array, index.z3_int, value.z3_int)
+        return SymbolicList(
+            _name=f"{self._name}[{index._name}]={value._name}",
+            z3_array=new_array,
+            z3_len=self.z3_len,
+            element_type=self.element_type,
+        )
+
+    def append(self, value: SymbolicValue) -> SymbolicList:
+        """Append element - returns new list."""
+        new_array = z3.Store(self.z3_array, self.z3_len, value.z3_int)
+        return SymbolicList(
+            _name=f"{self._name}.append({value._name})",
+            z3_array=new_array,
+            z3_len=self.z3_len + 1,
+            element_type=self.element_type,
+        )
+
+    def length(self) -> SymbolicValue:
+        """Get list length."""
+        return SymbolicValue(
+            _name=f"len({self._name})",
+            z3_int=self.z3_len,
+            is_int=z3.BoolVal(True),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def in_bounds(self, index: SymbolicValue) -> z3.BoolRef:
+        """Check if index is valid."""
+        return z3.And(index.z3_int >= 0, index.z3_int < self.z3_len)
+
+    def __repr__(self) -> str:
+        return f"SymbolicList({self._name}, len={self.z3_len})"
+
+
+@dataclass
+class SymbolicDict(SymbolicType):
+    """Symbolic dictionary using Z3 arrays.
+    For simplicity, we model string-keyed dicts with int values.
+    """
+
+    _name: str
+    z3_array: z3.ArrayRef
+    known_keys: z3.SeqRef
+    z3_len: z3.ArithRef
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def to_z3(self) -> z3.ExprRef:
+        return self.z3_array
+
+    def could_be_truthy(self) -> z3.BoolRef:
+        return self.z3_len > 0
+
+    def could_be_falsy(self) -> z3.BoolRef:
+        return self.z3_len == 0
+
+    @staticmethod
+    def symbolic(name: str) -> tuple[SymbolicDict, z3.BoolRef]:
+        """Create a fresh symbolic dict."""
+        z3_array = z3.Array(f"{name}_dict", z3.StringSort(), z3.IntSort())
+        known_keys = z3.Empty(z3.SeqSort(z3.StringSort()))
+        z3_len = z3.Int(f"{name}_len")
+        constraint = z3_len >= 0
+        return SymbolicDict(name, z3_array, known_keys, z3_len), constraint
+
+    def __getitem__(self, key: SymbolicString) -> SymbolicValue:
+        """Dict lookup."""
+        elem = z3.Select(self.z3_array, key.z3_str)
+        return SymbolicValue(
+            _name=f"{self._name}[{key._name}]",
+            z3_int=elem,
+            is_int=z3.BoolVal(True),
+            z3_bool=z3.BoolVal(False),
+            is_bool=z3.BoolVal(False),
+        )
+
+    def __setitem__(self, key: SymbolicString, value: SymbolicValue) -> SymbolicDict:
+        """Dict assignment - returns new dict."""
+        new_array = z3.Store(self.z3_array, key.z3_str, value.z3_int)
+        return SymbolicDict(
+            _name=f"{self._name}[{key._name}]={value._name}",
+            z3_array=new_array,
+            known_keys=self.known_keys,
+            z3_len=self.z3_len,
+        )
+
+    def contains_key(self, key: SymbolicString) -> SymbolicValue:
+        """Check if key exists."""
+        result = z3.Contains(self.known_keys, z3.Unit(key.z3_str))
+        return SymbolicValue(
+            _name=f"({key._name} in {self._name})",
+            z3_int=z3.IntVal(0),
+            is_int=z3.BoolVal(False),
+            z3_bool=result,
+            is_bool=z3.BoolVal(True),
+        )
+
+    def __repr__(self) -> str:
+        return f"SymbolicDict({self._name})"
+
+
+AnySymbolic = Union[SymbolicValue, SymbolicString, SymbolicList, SymbolicDict, SymbolicNone]
