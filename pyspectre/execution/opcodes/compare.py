@@ -1,20 +1,13 @@
 """Comparison opcodes."""
-
 from __future__ import annotations
-
 import dis
 from typing import TYPE_CHECKING
-
 import z3
-
 from pyspectre.core.types import SymbolicNone, SymbolicString, SymbolicValue
 from pyspectre.execution.dispatcher import OpcodeResult, opcode_handler
-
 if TYPE_CHECKING:
     from pyspectre.core.state import VMState
     from pyspectre.execution.dispatcher import OpcodeDispatcher
-
-
 @opcode_handler("COMPARE_OP")
 def handle_compare_op(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -23,6 +16,10 @@ def handle_compare_op(
     right = state.pop()
     left = state.pop()
     op_name = instr.argval
+    if not isinstance(left, (SymbolicValue, SymbolicString)):
+        left = SymbolicValue.from_const(left)
+    if not isinstance(right, (SymbolicValue, SymbolicString)):
+        right = SymbolicValue.from_const(right)
     if isinstance(left, SymbolicValue) and isinstance(right, SymbolicValue):
         if op_name == "==":
             result = left == right
@@ -75,8 +72,6 @@ def handle_compare_op(
     state.push(result)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("IS_OP")
 def handle_is_op(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Identity comparison (is / is not)."""
@@ -111,8 +106,6 @@ def handle_is_op(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) 
     state.push(result)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("CONTAINS_OP")
 def handle_contains_op(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher

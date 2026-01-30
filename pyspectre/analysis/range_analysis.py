@@ -8,65 +8,51 @@ detect bugs like:
 - Division by zero
 - Invalid ranges in loops
 """
-
 from __future__ import annotations
-
 import dis
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import (
     Any,
 )
-
 from .flow_sensitive import BasicBlock, CFGBuilder, ControlFlowGraph
-
-
 @dataclass(frozen=True)
 class Range:
     """
     Represents a range of integer values [low, high].
     """
-
     low: int | None = None
     high: int | None = None
     is_empty: bool = False
-
     @classmethod
     def empty(cls) -> Range:
         """Create empty range (bottom)."""
         return cls(is_empty=True)
-
     @classmethod
     def full(cls) -> Range:
         """Create full range (top)."""
         return cls(None, None)
-
     @classmethod
     def exact(cls, value: int) -> Range:
         """Create singleton range."""
         return cls(value, value)
-
     @classmethod
     def at_least(cls, min_val: int) -> Range:
         """Create range [min_val, +infinity)."""
         return cls(min_val, None)
-
     @classmethod
     def at_most(cls, max_val: int) -> Range:
         """Create range (-infinity, max_val]."""
         return cls(None, max_val)
-
     @classmethod
     def between(cls, low: int, high: int) -> Range:
         """Create range [low, high]."""
         if low > high:
             return cls.empty()
         return cls(low, high)
-
     def is_full(self) -> bool:
         """Check if this is the full range."""
         return not self.is_empty and self.low is None and self.high is None
-
     @property
     def is_exact(self) -> bool:
         """Check if this is a singleton."""
@@ -76,14 +62,12 @@ class Range:
             and self.high is not None
             and self.low == self.high
         )
-
     @property
     def exact_value(self) -> int | None:
         """Get exact value if singleton."""
         if self.is_exact:
             return self.low
         return None
-
     def contains(self, value: int) -> bool:
         """Check if value is in range."""
         if self.is_empty:
@@ -93,33 +77,26 @@ class Range:
         if self.high is not None and value > self.high:
             return False
         return True
-
     def may_be_zero(self) -> bool:
         """Check if range may contain zero."""
         return self.contains(0)
-
     def must_be_positive(self) -> bool:
         """Check if all values in range are positive."""
         return not self.is_empty and self.low is not None and self.low > 0
-
     def must_be_negative(self) -> bool:
         """Check if all values in range are negative."""
         return not self.is_empty and self.high is not None and self.high < 0
-
     def must_be_non_negative(self) -> bool:
         """Check if all values are >= 0."""
         return not self.is_empty and self.low is not None and self.low >= 0
-
     def must_be_non_positive(self) -> bool:
         """Check if all values are <= 0."""
         return not self.is_empty and self.high is not None and self.high <= 0
-
     def must_be_non_zero(self) -> bool:
         """Check if zero is definitely not in range."""
         if self.is_empty:
             return True
         return not self.contains(0)
-
     def union(self, other: Range) -> Range:
         """Compute union (join) of two ranges."""
         if self.is_empty:
@@ -137,7 +114,6 @@ class Range:
         else:
             new_high = max(self.high, other.high)
         return Range(new_low, new_high)
-
     def intersect(self, other: Range) -> Range:
         """Compute intersection (meet) of two ranges."""
         if self.is_empty or other.is_empty:
@@ -159,7 +135,6 @@ class Range:
         if new_low is not None and new_high is not None and new_low > new_high:
             return Range.empty()
         return Range(new_low, new_high)
-
     def widen(self, other: Range) -> Range:
         """Standard widening for loop analysis."""
         if self.is_empty:
@@ -183,13 +158,11 @@ class Range:
         else:
             new_high = None
         return Range(new_low, new_high)
-
     def narrow(self, other: Range) -> Range:
         """Standard narrowing."""
         new_low = self.low if self.low is not None else other.low
         new_high = self.high if self.high is not None else other.high
         return Range(new_low, new_high)
-
     def subset_of(self, other: Range) -> bool:
         """Check if this range is a subset of other."""
         if self.is_empty:
@@ -203,7 +176,6 @@ class Range:
             if self.high is None or self.high > other.high:
                 return False
         return True
-
     def add(self, other: Range) -> Range:
         """Range addition."""
         if self.is_empty or other.is_empty:
@@ -215,7 +187,6 @@ class Range:
         if self.high is not None and other.high is not None:
             new_high = self.high + other.high
         return Range(new_low, new_high)
-
     def sub(self, other: Range) -> Range:
         """Range subtraction."""
         if self.is_empty or other.is_empty:
@@ -227,7 +198,6 @@ class Range:
         if self.high is not None and other.low is not None:
             new_high = self.high - other.low
         return Range(new_low, new_high)
-
     def neg(self) -> Range:
         """Range negation."""
         if self.is_empty:
@@ -235,7 +205,6 @@ class Range:
         new_low = -self.high if self.high is not None else None
         new_high = -self.low if self.low is not None else None
         return Range(new_low, new_high)
-
     def mul(self, other: Range) -> Range:
         """Range multiplication."""
         if self.is_empty or other.is_empty:
@@ -258,7 +227,6 @@ class Range:
             ]
             return Range(min(products), max(products))
         return Range.full()
-
     def div(self, other: Range) -> tuple[Range, bool]:
         """Range division. Returns (result, may_div_by_zero)."""
         if self.is_empty or other.is_empty:
@@ -274,7 +242,6 @@ class Range:
                 results = [self.low // divisor, self.high // divisor]
                 return Range(min(results), max(results)), False
         return Range.full(), may_div_by_zero
-
     def mod(self, other: Range) -> tuple[Range, bool]:
         """Range modulo. Returns (result, may_div_by_zero)."""
         if self.is_empty or other.is_empty:
@@ -286,31 +253,24 @@ class Range:
             m = other.low
             return Range(0, m - 1), False
         return Range.full(), may_div_by_zero
-
     def __str__(self) -> str:
         if self.is_empty:
             return "∅"
         low_str = str(self.low) if self.low is not None else "-∞"
         high_str = str(self.high) if self.high is not None else "+∞"
         return f"[{low_str}, {high_str}]"
-
-
 @dataclass
 class RangeState:
     """State for range analysis."""
-
     variables: dict[str, Range] = field(default_factory=dict)
     stack: list[Range] = field(default_factory=list)
     is_bottom: bool = False
-
     @classmethod
     def bottom(cls) -> RangeState:
         return cls(is_bottom=True)
-
     @classmethod
     def top(cls) -> RangeState:
         return cls()
-
     def copy(self) -> RangeState:
         if self.is_bottom:
             return RangeState.bottom()
@@ -318,27 +278,21 @@ class RangeState:
             variables=dict(self.variables),
             stack=list(self.stack),
         )
-
     def get(self, var: str) -> Range:
         return self.variables.get(var, Range.full())
-
     def set(self, var: str, range_val: Range) -> None:
         self.variables[var] = range_val
-
     def push(self, range_val: Range) -> None:
         self.stack.append(range_val)
-
     def pop(self) -> Range:
         if self.stack:
             return self.stack.pop()
         return Range.full()
-
     def peek(self, depth: int = 0) -> Range:
         idx = -(depth + 1)
         if abs(idx) <= len(self.stack):
             return self.stack[idx]
         return Range.full()
-
     def join(self, other: RangeState) -> RangeState:
         if self.is_bottom:
             return other.copy()
@@ -351,7 +305,6 @@ class RangeState:
             r2 = other.get(var)
             result.variables[var] = r1.union(r2)
         return result
-
     def widen(self, other: RangeState) -> RangeState:
         if self.is_bottom:
             return other.copy()
@@ -364,7 +317,6 @@ class RangeState:
             r2 = other.get(var)
             result.variables[var] = r1.widen(r2)
         return result
-
     def subset_of(self, other: RangeState) -> bool:
         if self.is_bottom:
             return True
@@ -374,27 +326,20 @@ class RangeState:
             if not range_val.subset_of(other.get(var)):
                 return False
         return True
-
-
 @dataclass
 class RangeWarning:
     """A warning from range analysis."""
-
     line: int
     pc: int
     kind: str
     message: str
     range_info: Range | None = None
-
-
 class RangeAnalyzer:
     """
     Performs value range analysis on bytecode.
     """
-
     def __init__(self) -> None:
         self.warnings: list[RangeWarning] = []
-
     def analyze(
         self,
         code: Any,
@@ -406,7 +351,6 @@ class RangeAnalyzer:
         cfg = builder.build(code)
         final_ranges = self._analyze_cfg(cfg, code, file_path)
         return final_ranges, self.warnings
-
     def _analyze_cfg(
         self,
         cfg: ControlFlowGraph,
@@ -449,7 +393,6 @@ class RangeAnalyzer:
                 else:
                     final[var] = range_val
         return final
-
     def _transfer_block(
         self,
         block: BasicBlock,
@@ -465,7 +408,6 @@ class RangeAnalyzer:
                 current_line = instr.starts_line
             self._transfer_instruction(instr, state, current_line, file_path)
         return state
-
     def _transfer_instruction(
         self,
         instr: dis.Instruction,
@@ -611,16 +553,12 @@ class RangeAnalyzer:
             if len(state.stack) >= 2:
                 state.pop()
                 state.pop()
-
-
 class ValueRangeChecker:
     """
     High-level interface for value range checking.
     """
-
     def __init__(self) -> None:
         self.analyzer = RangeAnalyzer()
-
     def check_function(
         self,
         code: Any,
@@ -629,7 +567,6 @@ class ValueRangeChecker:
         """Check a function for range-related issues."""
         _, warnings = self.analyzer.analyze(code, file_path)
         return warnings
-
     def check_array_bounds(
         self,
         index_range: Range,

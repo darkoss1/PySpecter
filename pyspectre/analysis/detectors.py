@@ -7,24 +7,25 @@ PySpectre v1.1 - Enhanced detectors included:
 - Resource leak detection
 - Enhanced integer overflow detection
 """
-
 from __future__ import annotations
-
 import dis
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
-
 import z3
-
 if TYPE_CHECKING:
     from pyspectre.core.state import VMState
-
-
+from pyspectre.core.solver import get_model, is_satisfiable
+from pyspectre.core.types import (
+    SymbolicDict,
+    SymbolicList,
+    SymbolicNone,
+    SymbolicString,
+    SymbolicValue,
+)
 class IssueKind(Enum):
     """Types of issues that can be detected."""
-
     DIVISION_BY_ZERO = auto()
     ASSERTION_ERROR = auto()
     INDEX_ERROR = auto()
@@ -41,12 +42,12 @@ class IssueKind(Enum):
     INVALID_ARGUMENT = auto()
     FORMAT_STRING_INJECTION = auto()
     RESOURCE_LEAK = auto()
-
-
+    VALUE_ERROR = auto()
+    SQL_INJECTION = auto()
+    PATH_TRAVERSAL = auto()
 @dataclass
 class Issue:
     """Represents a detected issue."""
-
     kind: IssueKind
     message: str
     constraints: list[z3.ExprRef] = field(default_factory=list)
@@ -56,7 +57,6 @@ class Issue:
     function_name: str | None = None
     filename: str | None = None
     stack_trace: list[str] = field(default_factory=list)
-
     def get_counterexample(self) -> dict[str, Any]:
         """Extract counterexample from model."""
         if self.model is None:
@@ -86,7 +86,6 @@ class Issue:
             except Exception:
                 counterexample[base_name] = str(value)
         return counterexample
-
     def format(self) -> str:
         """Format issue for display."""
         lines = [f"[{self.kind.name}] {self.message}"]
@@ -111,7 +110,6 @@ class Issue:
             for frame in self.stack_trace:
                 lines.append(f"    {frame}")
         return "\n".join(lines)
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -124,15 +122,11 @@ class Issue:
             "counterexample": self.get_counterexample(),
             "stack_trace": self.stack_trace,
         }
-
-
 class Detector(ABC):
     """Base class for bug detectors."""
-
     name: str = "base"
     description: str = "Base detector"
     issue_kind: IssueKind = IssueKind.UNHANDLED_EXCEPTION
-
     @abstractmethod
     def check(
         self,
@@ -149,25 +143,19 @@ class Detector(ABC):
         Returns:
             Issue if a problem is detected, None otherwise
         """
-
-
 class DivisionByZeroDetector(Detector):
     """Detects potential division by zero errors."""
-
     name = "division-by-zero"
     description = "Detects division by zero"
     issue_kind = IssueKind.DIVISION_BY_ZERO
     DIVISION_OPS = {"BINARY_TRUE_DIVIDE", "BINARY_FLOOR_DIVIDE", "BINARY_MODULO"}
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
-        from pyspectre.core.solver import get_model, is_satisfiable
-        from pyspectre.core.types import SymbolicValue
-
+        """Check for division by zero or modulo zero."""
         if instruction.opname == "BINARY_OP":
             op_name = instruction.argrepr
             if "/" not in op_name and "%" not in op_name:
@@ -202,23 +190,18 @@ class DivisionByZeroDetector(Detector):
                 pc=state.pc,
             )
         return None
-
-
 class AssertionErrorDetector(Detector):
     """Detects failing assertions."""
-
     name = "assertion-error"
     description = "Detects failing assertions"
     issue_kind = IssueKind.ASSERTION_ERROR
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
-        from pyspectre.core.solver import get_model
-
+        """Check for assertion failures."""
         if instruction.opname != "RAISE_VARARGS":
             return None
         return Issue(
@@ -228,24 +211,18 @@ class AssertionErrorDetector(Detector):
             model=get_model(list(state.path_constraints)),
             pc=state.pc,
         )
-
-
 class IndexErrorDetector(Detector):
     """Detects out-of-bounds array/list access."""
-
     name = "index-error"
     description = "Detects out-of-bounds indexing"
     issue_kind = IssueKind.INDEX_ERROR
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
-        from pyspectre.core.solver import get_model, is_satisfiable
-        from pyspectre.core.types import SymbolicList, SymbolicValue
-
+        """Check for index out of bounds errors in lists."""
         if instruction.opname != "BINARY_SUBSCR":
             return None
         if len(state.stack) < 2:
@@ -273,40 +250,49 @@ class IndexErrorDetector(Detector):
                 pc=state.pc,
             )
         return None
-
-
 class KeyErrorDetector(Detector):
     """Detects missing dictionary keys."""
-
     name = "key-error"
     description = "Detects missing dictionary keys"
     issue_kind = IssueKind.KEY_ERROR
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
+        if instruction.opname != "BINARY_SUBSCR":
+            return None
+        if len(state.stack) < 2:
+            return None
+        key = state.stack[-1]
+        container = state.stack[-2]
+        if not isinstance(container, SymbolicDict):
+            return None
+        missing_key = [
+            *state.path_constraints,
+            z3.Not(container.contains_key(key).z3_bool),
+        ]
+        if is_satisfiable(missing_key):
+            return Issue(
+                kind=IssueKind.KEY_ERROR,
+                message=f"Possible KeyError: {container.name} may not contain key",
+                constraints=missing_key,
+                model=get_model(missing_key),
+                pc=state.pc,
+            )
         return None
-
-
 class TypeErrorDetector(Detector):
     """Detects type errors in operations."""
-
     name = "type-error"
     description = "Detects type mismatches"
     issue_kind = IssueKind.TYPE_ERROR
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
-        from pyspectre.core.solver import get_model, is_satisfiable
-        from pyspectre.core.types import SymbolicString, SymbolicValue
-
         if instruction.opname == "BINARY_OP":
             if len(state.stack) < 2:
                 return None
@@ -328,15 +314,11 @@ class TypeErrorDetector(Detector):
                             pc=state.pc,
                         )
         return None
-
-
 class AttributeErrorDetector(Detector):
     """Detects attribute access errors."""
-
     name = "attribute-error"
     description = "Detects missing attributes"
     issue_kind = IssueKind.ATTRIBUTE_ERROR
-
     def check(
         self,
         state: VMState,
@@ -344,11 +326,8 @@ class AttributeErrorDetector(Detector):
         solver_check: callable,
     ) -> Issue | None:
         return None
-
-
 class OverflowDetector(Detector):
     """Detects integer overflow conditions."""
-
     name = "overflow"
     description = "Detects integer overflow"
     issue_kind = IssueKind.OVERFLOW
@@ -357,19 +336,14 @@ class OverflowDetector(Detector):
         "64bit": (-(2**63), 2**63 - 1),
         "size_t": (0, 2**64 - 1),
     }
-
     def __init__(self, bound_type: str = "64bit"):
         self.min_val, self.max_val = self.BOUNDS.get(bound_type, self.BOUNDS["64bit"])
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
-        from pyspectre.core.solver import get_model, is_satisfiable
-        from pyspectre.core.types import SymbolicValue
-
         if instruction.opname != "BINARY_OP":
             return None
         op = instruction.argrepr
@@ -440,8 +414,6 @@ class OverflowDetector(Detector):
                 pc=state.pc,
             )
         return None
-
-
 class EnhancedIndexErrorDetector(Detector):
     """
     Enhanced detector for out-of-bounds array/list access.
@@ -452,7 +424,6 @@ class EnhancedIndexErrorDetector(Detector):
     - Detects when index could exceed any reasonable bound
     - Skips likely dict access patterns to reduce false positives
     """
-
     name = "enhanced-index-error"
     description = "Enhanced out-of-bounds index detection"
     issue_kind = IssueKind.INDEX_ERROR
@@ -532,15 +503,12 @@ class EnhancedIndexErrorDetector(Detector):
         "closure_parent",
         "states",
     )
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
-        from pyspectre.core.types import SymbolicList, SymbolicValue
-
         if instruction.opname != "BINARY_SUBSCR":
             return None
         if len(state.stack) < 2:
@@ -554,7 +522,6 @@ class EnhancedIndexErrorDetector(Detector):
                 return None
             return self._check_unbounded_index(state, index)
         return None
-
     def _is_likely_dict_access(self, container, index) -> bool:
         """Check if this subscript is likely dict[key] rather than list[index]."""
         container_name = getattr(container, "name", "") or ""
@@ -579,19 +546,31 @@ class EnhancedIndexErrorDetector(Detector):
             or container_is_instance_attr
             or index_is_common_var
         )
-
     def _check_symbolic_list(self, state, container, index):
-        from pyspectre.core.solver import get_model, is_satisfiable
-        from pyspectre.core.types import SymbolicValue
-
-        if not isinstance(index, SymbolicValue):
+        if isinstance(index, SymbolicValue):
+            oob_constraint = [
+                *state.path_constraints,
+                z3.Or(
+                    index.z3_int >= container.z3_len,
+                    index.z3_int < -container.z3_len,
+                ),
+            ]
+            if is_satisfiable(oob_constraint):
+                return Issue(
+                    kind=IssueKind.INDEX_ERROR,
+                    message=f"Index {index.name} may be out of bounds for {container.name}",
+                    constraints=oob_constraint,
+                    model=get_model(oob_constraint),
+                    pc=state.pc,
+                )
+        elif isinstance(index, (int, float)):
             try:
                 idx_val = int(index)
                 oob_constraint = [
                     *state.path_constraints,
                     z3.Or(
-                        z3.IntVal(idx_val) >= container.z3_len,
-                        z3.IntVal(idx_val) < -container.z3_len,
+                        idx_val >= container.z3_len,
+                        idx_val < -container.z3_len,
                     ),
                 ]
                 if is_satisfiable(oob_constraint):
@@ -604,28 +583,8 @@ class EnhancedIndexErrorDetector(Detector):
                     )
             except (ValueError, TypeError):
                 pass
-            return None
-        oob_constraint = [
-            *state.path_constraints,
-            index.is_int,
-            z3.Or(
-                index.z3_int >= container.z3_len,
-                index.z3_int < -container.z3_len,
-            ),
-        ]
-        if is_satisfiable(oob_constraint):
-            return Issue(
-                kind=IssueKind.INDEX_ERROR,
-                message=f"Index {index.name} may be out of bounds for {container.name}",
-                constraints=oob_constraint,
-                model=get_model(oob_constraint),
-                pc=state.pc,
-            )
         return None
-
     def _check_unbounded_index(self, state, index):
-        from pyspectre.core.solver import get_model, is_satisfiable
-
         large_constraint = [
             *state.path_constraints,
             index.is_int,
@@ -640,8 +599,6 @@ class EnhancedIndexErrorDetector(Detector):
                 pc=state.pc,
             )
         return None
-
-
 class NoneDereferenceDetector(Detector):
     """
     Detects attribute access or method calls on potentially None values.
@@ -649,27 +606,16 @@ class NoneDereferenceDetector(Detector):
     attributes accessed via 'self', as symbolic execution doesn't fully
     model Python's object initialization guarantees.
     """
-
     name = "none-dereference"
     description = "Detects attribute access on potentially None values"
     issue_kind = IssueKind.NULL_DEREFERENCE
     SKIP_NAMES = {"self", "cls", "module", "builtins", "__builtins__"}
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
-        from pyspectre.core.solver import get_model, is_satisfiable
-        from pyspectre.core.types import SymbolicValue
-
-        try:
-            from pyspectre.core.types import SymbolicNone
-
-            has_symbolic_none = True
-        except ImportError:
-            has_symbolic_none = False
         if instruction.opname not in ("LOAD_ATTR", "LOAD_METHOD", "STORE_ATTR"):
             return None
         if len(state.stack) < 1:
@@ -679,16 +625,13 @@ class NoneDereferenceDetector(Detector):
         if isinstance(obj, SymbolicValue):
             if obj.name in self.SKIP_NAMES:
                 return None
-        if has_symbolic_none:
-            from pyspectre.core.types import SymbolicNone
-
-            if isinstance(obj, SymbolicNone):
-                return Issue(
-                    kind=IssueKind.NULL_DEREFERENCE,
-                    message=f"Attribute access '{attr_name}' on None",
-                    constraints=list(state.path_constraints),
-                    pc=state.pc,
-                )
+        if isinstance(obj, SymbolicNone):
+            return Issue(
+                kind=IssueKind.NULL_DEREFERENCE,
+                message=f"Attribute access '{attr_name}' on None",
+                constraints=list(state.path_constraints),
+                pc=state.pc,
+            )
         if isinstance(obj, SymbolicValue):
             if obj.name in self.SKIP_NAMES:
                 return None
@@ -706,13 +649,10 @@ class NoneDereferenceDetector(Detector):
                         pc=state.pc,
                     )
         return None
-
-
 class EnhancedTypeErrorDetector(Detector):
     """Enhanced type confusion detector.
     Includes pattern recognition to avoid false positives on dict access.
     """
-
     name = "enhanced-type-error"
     description = "Enhanced type confusion detection"
     issue_kind = IssueKind.TYPE_ERROR
@@ -761,7 +701,6 @@ class EnhancedTypeErrorDetector(Detector):
         "frame_copy",
         "closure_parent",
     )
-
     def check(
         self,
         state: VMState,
@@ -779,11 +718,9 @@ class EnhancedTypeErrorDetector(Detector):
         if instruction.opname == "BINARY_OP":
             return self._check_binary_op(state, instruction)
         return None
-
     def _check_subscript_type(self, state, instruction):
         from pyspectre.core.solver import get_model, is_satisfiable
         from pyspectre.core.types import SymbolicValue
-
         if len(state.stack) < 2:
             return None
         container = state.stack[-2]
@@ -810,11 +747,9 @@ class EnhancedTypeErrorDetector(Detector):
                     pc=state.pc,
                 )
         return None
-
     def _check_binary_op(self, state, instruction):
         from pyspectre.core.solver import get_model, is_satisfiable
         from pyspectre.core.types import SymbolicString, SymbolicValue
-
         if len(state.stack) < 2:
             return None
         op = instruction.argrepr
@@ -832,16 +767,12 @@ class EnhancedTypeErrorDetector(Detector):
                         pc=state.pc,
                     )
         return None
-
-
 class FormatStringDetector(Detector):
     """Detects potential format string vulnerabilities."""
-
     name = "format-string"
     description = "Detects format string injection vulnerabilities"
     issue_kind = IssueKind.FORMAT_STRING_INJECTION
     DANGEROUS_CALLS = {"eval", "exec", "compile", "getattr", "setattr"}
-
     def check(
         self,
         state: VMState,
@@ -853,79 +784,123 @@ class FormatStringDetector(Detector):
         if instruction.opname == "FORMAT_VALUE":
             return self._check_format_value(state, instruction)
         return None
-
     def _check_dangerous_call(self, state, instruction):
-        try:
-            from pyspectre.core.types import SymbolicString
-
-            has_string = True
-        except ImportError:
-            has_string = False
-        if not has_string:
+        if not hasattr(state, "taint_tracker") or state.taint_tracker is None:
             return None
         argc = int(instruction.argval) if instruction.argval else 0
         if argc > 0 and len(state.stack) >= argc:
             for i in range(argc):
                 arg = state.stack[-(i + 1)]
-                if isinstance(arg, SymbolicString):
-                    if hasattr(arg, "taint_labels") and arg.taint_labels:
-                        return Issue(
-                            kind=IssueKind.FORMAT_STRING_INJECTION,
-                            message="Potentially tainted string passed to function call",
-                            constraints=list(state.path_constraints),
-                            pc=state.pc,
-                        )
+                if state.taint_tracker.is_tainted(arg):
+                    return Issue(
+                        kind=IssueKind.FORMAT_STRING_INJECTION,
+                        message="Potentially tainted string passed to function call",
+                        constraints=list(state.path_constraints),
+                        pc=state.pc,
+                    )
         return None
-
     def _check_format_value(self, state, instruction):
-        from pyspectre.core.types import SymbolicValue
-
+        if not hasattr(state, "taint_tracker") or state.taint_tracker is None:
+            return None
         if len(state.stack) < 1:
             return None
         val = state.stack[-1]
-        if isinstance(val, SymbolicValue):
-            if hasattr(val, "taint_labels") and val.taint_labels:
-                return Issue(
-                    kind=IssueKind.FORMAT_STRING_INJECTION,
-                    message="Tainted value used in format string",
-                    constraints=list(state.path_constraints),
-                    pc=state.pc,
-                )
+        if state.taint_tracker.is_tainted(val):
+            return Issue(
+                kind=IssueKind.FORMAT_STRING_INJECTION,
+                message="Tainted value used in format string",
+                constraints=list(state.path_constraints),
+                pc=state.pc,
+            )
         return None
-
-
 class ResourceLeakDetector(Detector):
-    """Detects potential resource leaks (unclosed files, connections)."""
-
+    """Detects potential resource leaks (unclosed files, connections).
+    Note: This detector is currently stubbed. Full resource leak detection
+    requires tracking resource lifetimes across the execution, which is
+    not yet fully implemented. This detector serves as a placeholder
+    for future enhancement.
+    """
     name = "resource-leak"
     description = "Detects unclosed resources (files, connections)"
     issue_kind = IssueKind.RESOURCE_LEAK
-
     def check(
         self,
         state: VMState,
         instruction: dis.Instruction,
         solver_check: callable,
     ) -> Issue | None:
-        if not hasattr(state, "_open_resources"):
-            state._open_resources = set()
-        if instruction.opname in ("LOAD_GLOBAL", "LOAD_NAME"):
-            if instruction.argval == "open":
-                state._pending_open = True
-        if instruction.opname == "RETURN_VALUE":
-            if hasattr(state, "_open_resources") and state._open_resources:
+        return None
+class ValueErrorDetector(Detector):
+    """Detects potential ValueError exceptions.
+
+    Checks for:
+    - str.index() when substring may not be found
+    - list.remove() when element may not exist
+    - int() with non-numeric strings
+    """
+    name = "value-error"
+    description = "Detects potential ValueError exceptions"
+    issue_kind = IssueKind.VALUE_ERROR
+    def check(
+        self,
+        state: VMState,
+        instruction: dis.Instruction,
+        solver_check: callable,
+    ) -> Issue | None:
+        if instruction.opname not in ("CALL", "CALL_FUNCTION", "CALL_METHOD"):
+            return None
+        if len(state.stack) < 2:
+            return None
+        for var_name, var_val in state.local_vars.items():
+            if hasattr(var_val, "_potential_exception"):
+                exc = getattr(var_val, "_potential_exception", None)
+                if exc == "ValueError":
+                    return Issue(
+                        kind=IssueKind.VALUE_ERROR,
+                        message=f"Potential ValueError from {var_name}",
+                        constraints=list(state.path_constraints),
+                        model=get_model(list(state.path_constraints)),
+                        pc=state.pc,
+                    )
+        return None
+class TaintFlowDetector(Detector):
+    """Detects tainted data flows to sensitive sinks."""
+    name = "taint-flow"
+    description = "Detects tainted data flows to security-sensitive sinks"
+    issue_kind = IssueKind.SQL_INJECTION
+    def check(
+        self,
+        state: VMState,
+        instruction: dis.Instruction,
+        solver_check: callable,
+    ) -> Issue | None:
+        if not hasattr(state, "_taint_tracker"):
+            return None
+        taint_tracker = state._taint_tracker
+        if taint_tracker is None:
+            return None
+        flows = taint_tracker.get_all_flows()
+        if not flows:
+            return None
+        for flow in flows:
+            from pyspectre.analysis.taint import TaintSink
+            if flow.sink == TaintSink.SQL_QUERY:
                 return Issue(
-                    kind=IssueKind.RESOURCE_LEAK,
-                    message=f"Potential resource leak: {len(state._open_resources)} resource(s) may not be closed",
+                    kind=IssueKind.SQL_INJECTION,
+                    message="Potential SQL injection: tainted data flows to SQL query",
+                    constraints=list(state.path_constraints),
+                    pc=state.pc,
+                )
+            elif flow.sink == TaintSink.FILE_PATH:
+                return Issue(
+                    kind=IssueKind.PATH_TRAVERSAL,
+                    message="Potential path traversal: tainted data flows to file path",
                     constraints=list(state.path_constraints),
                     pc=state.pc,
                 )
         return None
-
-
 class DetectorRegistry:
     """Registry of available detectors."""
-
     def __init__(self):
         self._detectors: dict[str, type[Detector]] = {}
         self._instances: dict[str, Detector] = {}
@@ -941,11 +916,11 @@ class DetectorRegistry:
         self.register(EnhancedTypeErrorDetector)
         self.register(FormatStringDetector)
         self.register(ResourceLeakDetector)
-
+        self.register(ValueErrorDetector)
+        self.register(TaintFlowDetector)
     def register(self, detector_class: type[Detector]) -> None:
         """Register a detector class."""
         self._detectors[detector_class.name] = detector_class
-
     def get(self, name: str) -> Detector | None:
         """Get a detector instance by name."""
         if name not in self._detectors:
@@ -953,18 +928,13 @@ class DetectorRegistry:
         if name not in self._instances:
             self._instances[name] = self._detectors[name]()
         return self._instances[name]
-
     def get_all(self) -> list[Detector]:
         """Get all detector instances."""
         return [self.get(name) for name in self._detectors]
-
     def get_by_kind(self, kind: IssueKind) -> list[Detector]:
         """Get detectors for a specific issue kind."""
         return [self.get(name) for name, cls in self._detectors.items() if cls.issue_kind == kind]
-
     def list_available(self) -> list[str]:
         """List available detector names."""
         return list(self._detectors.keys())
-
-
 default_registry = DetectorRegistry()

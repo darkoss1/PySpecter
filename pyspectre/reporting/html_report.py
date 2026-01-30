@@ -2,22 +2,16 @@
 Generates standalone HTML reports with analysis results, visualizations,
 and interactive features.
 """
-
 from __future__ import annotations
-
 import html
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
 from pyspectre.resources import ResourceSnapshot
-
-
 @dataclass
 class IssueReport:
     """Report for a single issue."""
-
     severity: str
     issue_type: str
     message: str
@@ -26,7 +20,6 @@ class IssueReport:
     function_name: str | None = None
     triggering_input: dict[str, Any] | None = None
     constraint_info: str | None = None
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -39,12 +32,9 @@ class IssueReport:
             "input": self.triggering_input,
             "constraint": self.constraint_info,
         }
-
-
 @dataclass
 class AnalysisReport:
     """Complete analysis report."""
-
     title: str
     timestamp: str
     duration_seconds: float
@@ -58,11 +48,9 @@ class AnalysisReport:
     success: bool = True
     partial: bool = False
     error_message: str | None = None
-
     def __post_init__(self):
         if self.issues is None:
             self.issues = []
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -80,8 +68,6 @@ class AnalysisReport:
             "partial": self.partial,
             "error": self.error_message,
         }
-
-
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -366,8 +352,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </script>
 </body>
 </html>"""
-
-
 def _format_issue_html(issue: IssueReport) -> str:
     """Format a single issue as HTML."""
     severity_class = (
@@ -402,8 +386,6 @@ def _format_issue_html(issue: IssueReport) -> str:
             {input_html}
         </div>
     """
-
-
 def _format_issues_section(issues: list[IssueReport]) -> str:
     """Format all issues as HTML."""
     if not issues:
@@ -415,8 +397,6 @@ def _format_issues_section(issues: list[IssueReport]) -> str:
             </div>
         """
     return "\n".join(_format_issue_html(issue) for issue in issues)
-
-
 def _format_resources_html(resources: ResourceSnapshot | None) -> str:
     """Format resource usage as HTML."""
     if resources is None:
@@ -438,8 +418,6 @@ def _format_resources_html(resources: ResourceSnapshot | None) -> str:
             </div>
         """)
     return "\n".join(html_parts)
-
-
 def generate_html_report(report: AnalysisReport) -> str:
     """Generate a standalone HTML report.
     Args:
@@ -479,8 +457,6 @@ def generate_html_report(report: AnalysisReport) -> str:
         version=html.escape(report.version),
     )
     return html_content
-
-
 def save_html_report(report: AnalysisReport, output_path: Path) -> None:
     """Save HTML report to file.
     Args:
@@ -489,8 +465,6 @@ def save_html_report(report: AnalysisReport, output_path: Path) -> None:
     """
     html_content = generate_html_report(report)
     output_path.write_text(html_content, encoding="utf-8")
-
-
 def create_report_from_result(
     result: Any,
     file_path: str,
@@ -545,8 +519,6 @@ def create_report_from_result(
         success=not issues,
         partial=getattr(result, "partial", False),
     )
-
-
 __all__ = [
     "IssueReport",
     "AnalysisReport",

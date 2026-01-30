@@ -1,18 +1,12 @@
 """Local and global variable opcodes."""
-
 from __future__ import annotations
-
 import dis
 from typing import TYPE_CHECKING
-
 from pyspectre.core.types import SymbolicNone, SymbolicString, SymbolicValue
 from pyspectre.execution.dispatcher import OpcodeResult, opcode_handler
-
 if TYPE_CHECKING:
     from pyspectre.core.state import VMState
     from pyspectre.execution.dispatcher import OpcodeDispatcher
-
-
 @opcode_handler("LOAD_CONST")
 def handle_load_const(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -28,8 +22,6 @@ def handle_load_const(
     state.push(sym_val)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_FAST", "LOAD_FAST_CHECK")
 def handle_load_fast(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Load a local variable onto the stack."""
@@ -43,8 +35,6 @@ def handle_load_fast(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatch
     state.push(value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_FAST_LOAD_FAST")
 def handle_load_fast_load_fast(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -62,20 +52,17 @@ def handle_load_fast_load_fast(
         state.push(value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_FAST")
 def handle_store_fast(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
 ) -> OpcodeResult:
+    """Store top of stack into a local variable."""
     """Store top of stack into local variable."""
     name = str(instr.argval)
     value = state.pop()
     state.set_local(name, value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_FAST_STORE_FAST")
 def handle_store_fast_store_fast(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -88,8 +75,6 @@ def handle_store_fast_store_fast(
         state.set_local(name, value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("DELETE_FAST")
 def handle_delete_fast(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -100,8 +85,6 @@ def handle_delete_fast(
         del state.local_vars[name]
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_GLOBAL")
 def handle_load_global(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -111,29 +94,32 @@ def handle_load_global(
         name = str(instr.argval[1]) if len(instr.argval) > 1 else str(instr.argval[0])
     else:
         name = str(instr.argval)
+    push_null = False
+    if hasattr(instr, "arg") and instr.arg is not None:
+        if instr.arg & 1:
+            push_null = True
     value = state.get_global(name)
     if value is None:
         sym_val, type_constraint = SymbolicValue.symbolic(f"global_{name}")
+        setattr(sym_val, "model_name", name)
         state.set_global(name, sym_val)
         state.add_constraint(type_constraint)
         value = sym_val
     state.push(value)
+    if push_null:
+        state.push(SymbolicNone())
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_GLOBAL")
 def handle_store_global(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
 ) -> OpcodeResult:
-    """Store top of stack into global variable."""
+    """Store top of stack into a global variable."""
     name = str(instr.argval)
     value = state.pop()
     state.set_global(name, value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("DELETE_GLOBAL")
 def handle_delete_global(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -144,8 +130,6 @@ def handle_delete_global(
         del state.global_vars[name]
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_NAME")
 def handle_load_name(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Load name from locals or globals."""
@@ -159,8 +143,6 @@ def handle_load_name(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatch
     state.push(value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_NAME")
 def handle_store_name(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -171,8 +153,6 @@ def handle_store_name(
     state.set_local(name, value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("DELETE_NAME")
 def handle_delete_name(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -183,8 +163,6 @@ def handle_delete_name(
         del state.local_vars[name]
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_DEREF", "LOAD_CLOSURE")
 def handle_load_deref(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -200,8 +178,6 @@ def handle_load_deref(
     state.push(value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_DEREF")
 def handle_store_deref(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -212,15 +188,11 @@ def handle_store_deref(
     state.set_local(name, value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("MAKE_CELL", "COPY_FREE_VARS")
 def handle_cell_ops(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Cell creation - mostly no-op for symbolic execution."""
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("DELETE_DEREF")
 def handle_delete_deref(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -231,8 +203,6 @@ def handle_delete_deref(
         del state.local_vars[name]
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_FAST_AND_CLEAR")
 def handle_load_fast_and_clear(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -246,8 +216,6 @@ def handle_load_fast_and_clear(
     state.set_local(name, None)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_FAST_LOAD_FAST")
 def handle_store_fast_load_fast(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -267,8 +235,6 @@ def handle_store_fast_load_fast(
     state.push(loaded)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_FAST_MAYBE_NULL")
 def handle_store_fast_maybe_null(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -279,8 +245,6 @@ def handle_store_fast_maybe_null(
     state.set_local(name, value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_FROM_DICT_OR_DEREF")
 def handle_load_from_dict_or_deref(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -296,8 +260,6 @@ def handle_load_from_dict_or_deref(
     state.push(value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_FROM_DICT_OR_GLOBALS")
 def handle_load_from_dict_or_globals(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -313,8 +275,6 @@ def handle_load_from_dict_or_globals(
     state.push(value)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LOAD_LOCALS")
 def handle_load_locals(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -325,8 +285,6 @@ def handle_load_locals(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("SETUP_ANNOTATIONS")
 def handle_setup_annotations(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher

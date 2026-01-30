@@ -9,20 +9,15 @@ This module detects:
 - Memory leaks from circular references
 - Unreleased locks
 """
-
 from __future__ import annotations
-
 import dis
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import (
     Any,
 )
-
-
 class ResourceKind(Enum):
     """Types of resources that can leak."""
-
     FILE_HANDLE = auto()
     NETWORK_SOCKET = auto()
     DATABASE_CONNECTION = auto()
@@ -41,21 +36,15 @@ class ResourceKind(Enum):
     TIMER = auto()
     GENERATOR = auto()
     CONTEXT_MANAGER = auto()
-
-
 class ResourceState(Enum):
     """State of a resource."""
-
     OPENED = auto()
     CLOSED = auto()
     MAYBE_CLOSED = auto()
     ESCAPED = auto()
-
-
 @dataclass
 class Resource:
     """A tracked resource."""
-
     kind: ResourceKind
     name: str
     open_line: int
@@ -63,16 +52,12 @@ class Resource:
     state: ResourceState = ResourceState.OPENED
     close_line: int | None = None
     in_context_manager: bool = False
-
     def is_leaked(self) -> bool:
         """Check if resource is leaked."""
         return self.state == ResourceState.OPENED and not self.in_context_manager
-
-
 @dataclass
 class ResourceWarning:
     """Warning about resource usage."""
-
     kind: str
     file: str
     line: int
@@ -80,8 +65,6 @@ class ResourceWarning:
     resource_name: str
     message: str
     severity: str = "warning"
-
-
 RESOURCE_OPENERS: dict[str, ResourceKind] = {
     "open": ResourceKind.FILE_HANDLE,
     "io.open": ResourceKind.FILE_HANDLE,
@@ -121,18 +104,14 @@ RESOURCE_CLOSERS: set[str] = {
     "disconnect",
     "__exit__",
 }
-
-
 class ResourceLeakDetector:
     """
     Detects resource leaks by tracking open/close operations.
     """
-
     def __init__(self) -> None:
         self.resources: dict[str, Resource] = {}
         self.warnings: list[ResourceWarning] = []
         self.context_stack: list[str] = []
-
     def detect(
         self,
         code: Any,
@@ -196,7 +175,6 @@ class ResourceLeakDetector:
                 self._check_leaks_at_exit(file_path, current_line)
         self._check_leaks_at_exit(file_path, current_line)
         return self.warnings
-
     def _check_leaks_at_exit(self, file_path: str, line: int) -> None:
         """Check for resource leaks at function exit."""
         for name, resource in self.resources.items():
@@ -214,13 +192,10 @@ class ResourceLeakDetector:
                         ),
                     )
                 )
-
-
 class ContextManagerAnalyzer:
     """
     Analyzes context manager usage patterns.
     """
-
     def analyze(
         self,
         code: Any,
@@ -262,23 +237,17 @@ class ContextManagerAnalyzer:
                 )
             )
         return warnings
-
-
 @dataclass
 class ObjectNode:
     """Node in reference graph."""
-
     name: str
     line: int
     references: set[str] = field(default_factory=set)
-
-
 class ReferenceCycleDetector:
     """
     Detects potential reference cycles that could cause memory leaks.
     Note: This is a static approximation - actual cycles depend on runtime.
     """
-
     def detect(
         self,
         code: Any,
@@ -323,13 +292,10 @@ class ReferenceCycleDetector:
                     )
                 )
         return warnings
-
-
 class LockSafetyAnalyzer:
     """
     Analyzes lock acquisition and release patterns.
     """
-
     def analyze(
         self,
         code: Any,
@@ -392,13 +358,10 @@ class LockSafetyAnalyzer:
                         )
                     )
         return warnings
-
-
 class GeneratorCleanupAnalyzer:
     """
     Analyzes generator cleanup patterns.
     """
-
     def analyze(
         self,
         code: Any,
@@ -443,20 +406,16 @@ class GeneratorCleanupAnalyzer:
                 )
             )
         return warnings
-
-
 class ResourceAnalyzer:
     """
     High-level interface for resource leak detection.
     """
-
     def __init__(self) -> None:
         self.leak_detector = ResourceLeakDetector()
         self.context_analyzer = ContextManagerAnalyzer()
         self.cycle_detector = ReferenceCycleDetector()
         self.lock_analyzer = LockSafetyAnalyzer()
         self.generator_analyzer = GeneratorCleanupAnalyzer()
-
     def analyze_function(
         self,
         code: Any,
@@ -470,7 +429,6 @@ class ResourceAnalyzer:
         warnings.extend(self.lock_analyzer.analyze(code, file_path))
         warnings.extend(self.generator_analyzer.analyze(code, file_path))
         return warnings
-
     def analyze_module(
         self,
         module_code: Any,
@@ -481,7 +439,6 @@ class ResourceAnalyzer:
         warnings.extend(self.analyze_function(module_code, file_path))
         self._analyze_nested(module_code, file_path, warnings)
         return warnings
-
     def _analyze_nested(
         self,
         code: Any,
@@ -493,7 +450,6 @@ class ResourceAnalyzer:
             if hasattr(const, "co_code"):
                 warnings.extend(self.analyze_function(const, file_path))
                 self._analyze_nested(const, file_path, warnings)
-
     def analyze_file(self, file_path: str) -> list[ResourceWarning]:
         """Analyze a file for resource issues."""
         try:

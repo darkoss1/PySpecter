@@ -7,9 +7,7 @@ This module provides enhanced bug detectors that integrate with:
 These detectors are designed to minimize false positives while
 catching real bugs.
 """
-
 from __future__ import annotations
-
 import dis
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
@@ -18,7 +16,6 @@ from enum import Enum, auto
 from typing import (
     Any,
 )
-
 from .flow_sensitive import (
     CFGBuilder,
     FlowContext,
@@ -35,11 +32,8 @@ from .type_inference import (
     TypeEnvironment,
     TypeKind,
 )
-
-
 class IssueKind(Enum):
     """Categories of issues that can be detected."""
-
     TYPE_ERROR = auto()
     ATTRIBUTE_ERROR = auto()
     INDEX_ERROR = auto()
@@ -58,21 +52,15 @@ class IssueKind(Enum):
     INFINITE_LOOP = auto()
     TAINT_ERROR = auto()
     INJECTION = auto()
-
-
 class Severity(Enum):
     """Severity levels for issues."""
-
     ERROR = auto()
     WARNING = auto()
     INFO = auto()
     HINT = auto()
-
-
 @dataclass
 class Issue:
     """Represents a detected issue."""
-
     kind: IssueKind
     severity: Severity
     file: str
@@ -86,11 +74,9 @@ class Issue:
     fix_suggestion: str | None = None
     detector_name: str | None = None
     suppression_reason: str | None = None
-
     def is_suppressed(self) -> bool:
         """Check if issue was suppressed."""
         return self.suppression_reason is not None
-
     def format(self) -> str:
         """Format the issue for display."""
         sev = self.severity.name.lower()
@@ -100,15 +86,12 @@ class Issue:
             loc += f":{self.column}"
         conf = f" ({self.confidence:.0%} confident)" if self.confidence < 1.0 else ""
         return f"[{sev}] {kind} at {loc}{conf}: {self.message}"
-
-
 @dataclass
 class DetectionContext:
     """
     Context provided to detectors during analysis.
     Contains all available analysis information.
     """
-
     code: Any
     instructions: Sequence[dis.Instruction]
     pc: int
@@ -120,24 +103,19 @@ class DetectionContext:
     file_path: str
     function_name: str
     symbolic_state: Any | None = None
-
     def get_type(self, var_name: str) -> PyType:
         """Get type of a variable."""
         return self.type_env.get_type(var_name)
-
     def is_definitely_type(self, var_name: str, kind: TypeKind) -> bool:
         """Check if variable is definitely of a type."""
         var_type = self.type_env.get_type(var_name)
         return var_type.kind == kind
-
     def can_pattern_suppress(self, error_type: str) -> bool:
         """Check if a pattern suppresses an error at this PC."""
         return not self.pattern_info.can_error_occur(self.pc, error_type)
-
     def is_in_try_block(self, exception_type: str) -> bool:
         """Check if current PC is in a try block catching the exception."""
         from .pattern_handlers import PatternKind
-
         patterns = self.pattern_info.matcher.get_patterns_at(self.pc)
         for pattern in patterns:
             if pattern.kind == PatternKind.TRY_EXCEPT_PATTERN:
@@ -145,8 +123,6 @@ class DetectionContext:
                 if exception_type in caught or "Exception" in caught:
                     return True
         return False
-
-
 class EnhancedDetector(ABC):
     """
     Base class for enhanced detectors.
@@ -155,15 +131,12 @@ class EnhancedDetector(ABC):
     - Flow analysis
     - Pattern recognition
     """
-
     def __init__(self) -> None:
         self.name = self.__class__.__name__
         self.issues: list[Issue] = []
-
     @abstractmethod
     def issue_kind(self) -> IssueKind:
         """Return the kind of issues this detector finds."""
-
     @abstractmethod
     def check(self, ctx: DetectionContext) -> Issue | None:
         """
@@ -171,14 +144,12 @@ class EnhancedDetector(ABC):
         Returns an Issue if one is found, None otherwise.
         The issue may have a suppression_reason if it was suppressed.
         """
-
     def should_check(self, ctx: DetectionContext) -> bool:
         """
         Determine if this detector should run at this context.
         Override for efficiency to skip irrelevant instructions.
         """
         return True
-
     def get_severity(self, confidence: float) -> Severity:
         """Determine severity based on confidence."""
         if confidence >= 0.95:
@@ -189,7 +160,6 @@ class EnhancedDetector(ABC):
             return Severity.INFO
         else:
             return Severity.HINT
-
     def create_issue(
         self,
         ctx: DetectionContext,
@@ -211,7 +181,6 @@ class EnhancedDetector(ABC):
             fix_suggestion=fix_suggestion,
             detector_name=self.name,
         )
-
     def suppress_issue(
         self,
         issue: Issue,
@@ -220,8 +189,6 @@ class EnhancedDetector(ABC):
         """Mark an issue as suppressed."""
         issue.suppression_reason = reason
         return issue
-
-
 class EnhancedDivisionByZeroDetector(EnhancedDetector):
     """
     Enhanced detector for division by zero errors.
@@ -231,19 +198,15 @@ class EnhancedDivisionByZeroDetector(EnhancedDetector):
     - Flow analysis (guards like `if x != 0`)
     - Loop context (divisor proven positive by iteration)
     """
-
     DIVISION_OPS = {"BINARY_OP"}
     DIVISION_ARGREPS = {"/", "//", "%"}
-
     def issue_kind(self) -> IssueKind:
         return IssueKind.DIVISION_BY_ZERO
-
     def should_check(self, ctx: DetectionContext) -> bool:
         instr = ctx.instruction
         if instr.opname == "BINARY_OP":
             return instr.argrepr in self.DIVISION_ARGREPS
         return False
-
     def check(self, ctx: DetectionContext) -> Issue | None:
         instr = ctx.instruction
         divisor_info = self._get_divisor_info(ctx)
@@ -286,7 +249,6 @@ class EnhancedDivisionByZeroDetector(EnhancedDetector):
             explanation="The divisor could be zero at runtime, causing a ZeroDivisionError.",
             fix_suggestion="Add a check: `if divisor != 0:` before the division.",
         )
-
     def _get_divisor_info(
         self,
         ctx: DetectionContext,
@@ -309,7 +271,6 @@ class EnhancedDivisionByZeroDetector(EnhancedDetector):
             var_type = ctx.get_type(var_name)
             return (None, var_name, var_type)
         return (None, None, None)
-
     def _type_guarantees_nonzero(self, var_type: PyType) -> bool:
         """Check if type guarantees non-zero value."""
         if var_type.kind == TypeKind.BOOL:
@@ -319,7 +280,6 @@ class EnhancedDivisionByZeroDetector(EnhancedDetector):
                 if "> 0" in str(constraint) or ">= 1" in str(constraint):
                     return True
         return False
-
     def _is_guarded_by_zero_check(
         self,
         ctx: DetectionContext,
@@ -334,7 +294,6 @@ class EnhancedDivisionByZeroDetector(EnhancedDetector):
                 if pattern.variables.get("var_name") == var_name:
                     return True
         return False
-
     def _has_prior_assertion(
         self,
         ctx: DetectionContext,
@@ -349,8 +308,6 @@ class EnhancedDivisionByZeroDetector(EnhancedDetector):
             if instr.opname == "LOAD_ASSERTION_ERROR":
                 pass
         return False
-
-
 class EnhancedKeyErrorDetector(EnhancedDetector):
     """
     Enhanced detector for KeyError.
@@ -361,13 +318,10 @@ class EnhancedKeyErrorDetector(EnhancedDetector):
     - Prior key existence checks
     - Iteration patterns (dict.items(), etc.)
     """
-
     def issue_kind(self) -> IssueKind:
         return IssueKind.KEY_ERROR
-
     def should_check(self, ctx: DetectionContext) -> bool:
         return ctx.instruction.opname == "BINARY_SUBSCR"
-
     def check(self, ctx: DetectionContext) -> Issue | None:
         instr = ctx.instruction
         container_info = self._get_container_info(ctx)
@@ -413,7 +367,6 @@ class EnhancedKeyErrorDetector(EnhancedDetector):
             explanation="Dictionary access may raise KeyError if key doesn't exist.",
             fix_suggestion="Use `dict.get(key, default)` or check `if key in dict:` first.",
         )
-
     def _get_container_info(
         self,
         ctx: DetectionContext,
@@ -446,7 +399,6 @@ class EnhancedKeyErrorDetector(EnhancedDetector):
         if container_var is None:
             return None
         return (container_var, container_type, key_var, key_value)
-
     def _key_known_to_exist(
         self,
         ctx: DetectionContext,
@@ -460,7 +412,6 @@ class EnhancedKeyErrorDetector(EnhancedDetector):
             if key_value in container_type.element_types:
                 return True
         return False
-
     def _has_key_check(
         self,
         ctx: DetectionContext,
@@ -476,8 +427,6 @@ class EnhancedKeyErrorDetector(EnhancedDetector):
             if instr.opname == "CONTAINS_OP":
                 return True
         return False
-
-
 class EnhancedIndexErrorDetector(EnhancedDetector):
     """
     Enhanced detector for IndexError.
@@ -487,13 +436,10 @@ class EnhancedIndexErrorDetector(EnhancedDetector):
     - Prior length checks
     - Negative indexing (which is often valid)
     """
-
     def issue_kind(self) -> IssueKind:
         return IssueKind.INDEX_ERROR
-
     def should_check(self, ctx: DetectionContext) -> bool:
         return ctx.instruction.opname == "BINARY_SUBSCR"
-
     def check(self, ctx: DetectionContext) -> Issue | None:
         container_info = self._get_container_info(ctx)
         if container_info is None:
@@ -553,7 +499,6 @@ class EnhancedIndexErrorDetector(EnhancedDetector):
             explanation="List/tuple index may be out of bounds at runtime.",
             fix_suggestion="Check `if index < len(collection):` or use try/except.",
         )
-
     def _get_container_info(
         self,
         ctx: DetectionContext,
@@ -586,7 +531,6 @@ class EnhancedIndexErrorDetector(EnhancedDetector):
         if container_var is None:
             return None
         return (container_var, container_type, index_var, index_value)
-
     def _in_safe_iteration(
         self,
         ctx: DetectionContext,
@@ -605,7 +549,6 @@ class EnhancedIndexErrorDetector(EnhancedDetector):
             }:
                 return True
         return False
-
     def _has_bounds_check(
         self,
         ctx: DetectionContext,
@@ -623,7 +566,6 @@ class EnhancedIndexErrorDetector(EnhancedDetector):
             if instr.opname == "COMPARE_OP":
                 pass
         return False
-
     def _is_safe_access_pattern(
         self,
         ctx: DetectionContext,
@@ -637,8 +579,6 @@ class EnhancedIndexErrorDetector(EnhancedDetector):
             if container_type.length is not None and container_type.length > 0:
                 return True
         return False
-
-
 class EnhancedTypeErrorDetector(EnhancedDetector):
     """
     Enhanced detector for TypeError.
@@ -648,10 +588,8 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
     - isinstance checks that narrow type
     - Union types and overloads
     """
-
     def issue_kind(self) -> IssueKind:
         return IssueKind.TYPE_ERROR
-
     def should_check(self, ctx: DetectionContext) -> bool:
         instr = ctx.instruction
         if instr.opname == "BINARY_OP":
@@ -661,7 +599,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
         if instr.opname == "LOAD_ATTR":
             return True
         return False
-
     def check(self, ctx: DetectionContext) -> Issue | None:
         instr = ctx.instruction
         if instr.opname == "BINARY_OP":
@@ -671,7 +608,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
         elif instr.opname == "LOAD_ATTR":
             return self._check_attribute(ctx)
         return None
-
     def _check_binary_op(self, ctx: DetectionContext) -> Issue | None:
         """Check binary operation for type errors."""
         instr = ctx.instruction
@@ -690,7 +626,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
             message=message,
             confidence=0.8,
         )
-
     def _check_call(self, ctx: DetectionContext) -> Issue | None:
         """Check function call for type errors."""
         func_info = self._get_function_info(ctx)
@@ -704,7 +639,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
             message=f"TypeError: `{func_name}` of type `{func_type.kind.name}` is not callable",
             confidence=0.7,
         )
-
     def _check_attribute(self, ctx: DetectionContext) -> Issue | None:
         """Check attribute access for type errors."""
         instr = ctx.instruction
@@ -729,7 +663,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
                     confidence=0.6,
                 )
         return None
-
     def _get_binary_operands(
         self,
         ctx: DetectionContext,
@@ -764,7 +697,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
                 left_type = ctx.get_type(left_var)
                 break
         return (left_type, right_type, left_var, right_var)
-
     def _type_from_value(self, value: Any) -> PyType:
         """Infer type from a constant value."""
         if value is None:
@@ -786,7 +718,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
         elif isinstance(value, set):
             return PyType.set_type()
         return PyType.unknown()
-
     def _is_valid_binary_op(
         self,
         op: str,
@@ -819,7 +750,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
         if op in {"<", ">", "<=", ">=", "==", "!="}:
             return True
         return False
-
     def _get_function_info(
         self,
         ctx: DetectionContext,
@@ -841,7 +771,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
                 func_type = ctx.get_type(func_name)
                 return (func_name, func_type)
         return None
-
     def _get_object_info(
         self,
         ctx: DetectionContext,
@@ -862,7 +791,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
             obj_type = ctx.get_type(obj_name)
             return (obj_name, obj_type)
         return None
-
     def _type_has_attribute(self, obj_type: PyType, attr: str) -> bool:
         """Check if a type has an attribute."""
         type_attrs: dict[TypeKind, set[str]] = {
@@ -927,8 +855,6 @@ class EnhancedTypeErrorDetector(EnhancedDetector):
         if obj_type.kind in type_attrs:
             return attr in type_attrs[obj_type.kind]
         return True
-
-
 class EnhancedAttributeErrorDetector(EnhancedDetector):
     """
     Enhanced detector for AttributeError.
@@ -938,13 +864,10 @@ class EnhancedAttributeErrorDetector(EnhancedDetector):
     - Optional chaining (x and x.attr)
     - Type narrowing from isinstance
     """
-
     def issue_kind(self) -> IssueKind:
         return IssueKind.ATTRIBUTE_ERROR
-
     def should_check(self, ctx: DetectionContext) -> bool:
         return ctx.instruction.opname == "LOAD_ATTR"
-
     def check(self, ctx: DetectionContext) -> Issue | None:
         instr = ctx.instruction
         attr_name = instr.argval
@@ -981,7 +904,6 @@ class EnhancedAttributeErrorDetector(EnhancedDetector):
             )
             return self.suppress_issue(issue, "Caught by exception handler")
         return None
-
     def _get_object_info(
         self,
         ctx: DetectionContext,
@@ -1000,7 +922,6 @@ class EnhancedAttributeErrorDetector(EnhancedDetector):
         if prev.opname in {"LOAD_FAST", "LOAD_NAME", "LOAD_GLOBAL", "LOAD_DEREF"}:
             return (prev.argval, ctx.get_type(prev.argval))
         return None
-
     def _has_none_check(self, ctx: DetectionContext, var_name: str) -> bool:
         """Check for prior None check on variable."""
         patterns = ctx.pattern_info.matcher.get_patterns_at(ctx.pc)
@@ -1010,7 +931,6 @@ class EnhancedAttributeErrorDetector(EnhancedDetector):
                     if pattern.variables.get("is_not_none", False):
                         return True
         return False
-
     def _has_hasattr_check(
         self,
         ctx: DetectionContext,
@@ -1023,7 +943,6 @@ class EnhancedAttributeErrorDetector(EnhancedDetector):
             if pattern.kind == PatternKind.HASATTR_CHECK:
                 return True
         return False
-
     def _in_optional_chain(self, ctx: DetectionContext, var_name: str) -> bool:
         """Check if in an optional chain pattern."""
         patterns = ctx.pattern_info.matcher.get_patterns_at(ctx.pc)
@@ -1032,20 +951,15 @@ class EnhancedAttributeErrorDetector(EnhancedDetector):
                 if pattern.variables.get("var_name") == var_name:
                     return True
         return False
-
-
 class EnhancedAssertionErrorDetector(EnhancedDetector):
     """
     Enhanced detector for assertion failures.
     Checks if assert conditions are always false.
     """
-
     def issue_kind(self) -> IssueKind:
         return IssueKind.ASSERTION_ERROR
-
     def should_check(self, ctx: DetectionContext) -> bool:
         return ctx.instruction.opname == "LOAD_ASSERTION_ERROR"
-
     def check(self, ctx: DetectionContext) -> Issue | None:
         condition_info = self._get_assertion_condition(ctx)
         if condition_info:
@@ -1057,7 +971,6 @@ class EnhancedAssertionErrorDetector(EnhancedDetector):
                     confidence=0.95,
                 )
         return None
-
     def _get_assertion_condition(
         self,
         ctx: DetectionContext,
@@ -1080,20 +993,15 @@ class EnhancedAssertionErrorDetector(EnhancedDetector):
             if instr.opname == "POP_JUMP_IF_TRUE":
                 break
         return None
-
-
 class DeadCodeDetector(EnhancedDetector):
     """
     Detector for dead/unreachable code.
     Finds code that can never execute.
     """
-
     def issue_kind(self) -> IssueKind:
         return IssueKind.DEAD_CODE
-
     def should_check(self, ctx: DetectionContext) -> bool:
         return ctx.flow_context is not None
-
     def check(self, ctx: DetectionContext) -> Issue | None:
         if ctx.flow_context is None:
             return None
@@ -1107,15 +1015,11 @@ class DeadCodeDetector(EnhancedDetector):
                     explanation="This code can never be executed.",
                 )
         return None
-
-
 class DetectorRegistry:
     """Registry of all enhanced detectors."""
-
     def __init__(self) -> None:
         self.detectors: list[EnhancedDetector] = []
         self._register_default_detectors()
-
     def _register_default_detectors(self) -> None:
         """Register all default detectors."""
         self.register(EnhancedDivisionByZeroDetector())
@@ -1125,26 +1029,20 @@ class DetectorRegistry:
         self.register(EnhancedAttributeErrorDetector())
         self.register(EnhancedAssertionErrorDetector())
         self.register(DeadCodeDetector())
-
     def register(self, detector: EnhancedDetector) -> None:
         """Register a detector."""
         self.detectors.append(detector)
-
     def get_all(self) -> list[EnhancedDetector]:
         """Get all registered detectors."""
         return list(self.detectors)
-
-
 class EnhancedAnalyzer:
     """
     Enhanced analyzer that integrates all detection systems.
     """
-
     def __init__(self) -> None:
         self.registry = DetectorRegistry()
         self.type_analyzer = TypeAnalyzer()
         self.pattern_analyzer = PatternAnalyzer()
-
     def analyze_function(
         self,
         code: Any,

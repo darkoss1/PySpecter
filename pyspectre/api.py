@@ -1,11 +1,8 @@
 """Public API for PySpectre."""
-
 from __future__ import annotations
-
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-
 from pyspectre.analysis.detectors import Issue, IssueKind
 from pyspectre.execution.executor import (
     ExecutionConfig,
@@ -13,8 +10,6 @@ from pyspectre.execution.executor import (
     SymbolicExecutor,
 )
 from pyspectre.reporting.formatters import format_result
-
-
 def analyze(
     func: Callable,
     symbolic_args: dict[str, str] | None = None,
@@ -78,8 +73,6 @@ def analyze(
     )
     executor = SymbolicExecutor(config)
     return executor.execute_function(func, symbolic_args or {})
-
-
 def analyze_code(
     code: str,
     symbolic_vars: dict[str, str] | None = None,
@@ -104,8 +97,6 @@ def analyze_code(
     config = ExecutionConfig(**kwargs)
     executor = SymbolicExecutor(config)
     return executor.execute_code(compiled, symbolic_vars or {})
-
-
 def analyze_file(
     filepath: str | Path,
     function_name: str,
@@ -136,9 +127,24 @@ def analyze_file(
     func = namespace[function_name]
     if not callable(func):
         raise ValueError(f"'{function_name}' is not a callable")
-    return analyze(func, symbolic_args, **kwargs)
-
-
+    analyze_kwargs = {
+        k: v
+        for k, v in kwargs.items()
+        if k
+        in [
+            "max_paths",
+            "max_depth",
+            "max_iterations",
+            "timeout",
+            "verbose",
+            "detect_division_by_zero",
+            "detect_assertion_errors",
+            "detect_index_errors",
+            "detect_type_errors",
+            "detect_overflow",
+        ]
+    }
+    return analyze(func, symbolic_args, **analyze_kwargs)
 def quick_check(func: Callable) -> list[Issue]:
     """
     Quick check a function for common issues.
@@ -155,8 +161,6 @@ def quick_check(func: Callable) -> list[Issue]:
     """
     result = analyze(func, max_paths=100, max_iterations=500)
     return result.issues
-
-
 def check_division_by_zero(func: Callable) -> list[Issue]:
     """
     Check specifically for division by zero issues.
@@ -173,8 +177,6 @@ def check_division_by_zero(func: Callable) -> list[Issue]:
         detect_type_errors=False,
     )
     return result.get_issues_by_kind(IssueKind.DIVISION_BY_ZERO)
-
-
 def check_assertions(func: Callable) -> list[Issue]:
     """
     Check specifically for assertion errors.
@@ -191,8 +193,6 @@ def check_assertions(func: Callable) -> list[Issue]:
         detect_type_errors=False,
     )
     return result.get_issues_by_kind(IssueKind.ASSERTION_ERROR)
-
-
 def check_index_errors(func: Callable) -> list[Issue]:
     """
     Check specifically for index out of bounds errors.
@@ -209,8 +209,6 @@ def check_index_errors(func: Callable) -> list[Issue]:
         detect_type_errors=False,
     )
     return result.get_issues_by_kind(IssueKind.INDEX_ERROR)
-
-
 def format_issues(
     issues: list[Issue],
     format_type: str = "text",
@@ -227,13 +225,10 @@ def format_issues(
     for i, issue in enumerate(issues, 1):
         if format_type == "json":
             import json
-
             lines.append(json.dumps(issue.to_dict(), indent=2))
         else:
             lines.append(f"[{i}] {issue.format()}")
     return "\n\n".join(lines)
-
-
 check = analyze
 scan = analyze_file
 __all__ = [

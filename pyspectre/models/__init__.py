@@ -1,5 +1,4 @@
 """Models module for Python builtins and standard library."""
-
 from pyspectre.models.builtins import (
     AbsModel,
     BoolModel,
@@ -28,6 +27,19 @@ from pyspectre.models.lists import (
     ListExtendModel,
     ListInsertModel,
     ListPopModel,
+)
+from pyspectre.models.sets import (
+    SET_MODELS,
+    SetAddModel,
+    SetRemoveModel,
+    SetDiscardModel,
+    SetPopModel,
+    SetClearModel,
+    SetCopyModel,
+    SetUnionModel,
+    SetIntersectionModel,
+    SetContainsModel,
+    SetLenModel,
 )
 from pyspectre.models.objects import (
     BoundMethod,
@@ -97,7 +109,6 @@ from pyspectre.models.strings import (
     StrStripModel,
     StrUpperModel,
 )
-
 __all__ = [
     "ModelResult",
     "FunctionModel",
@@ -124,6 +135,17 @@ __all__ = [
     "ListExtendModel",
     "ListPopModel",
     "ListInsertModel",
+    "SET_MODELS",
+    "SetAddModel",
+    "SetRemoveModel",
+    "SetDiscardModel",
+    "SetPopModel",
+    "SetClearModel",
+    "SetCopyModel",
+    "SetUnionModel",
+    "SetIntersectionModel",
+    "SetContainsModel",
+    "SetLenModel",
     "DICT_MODELS",
     "DictGetModel",
     "DictKeysModel",

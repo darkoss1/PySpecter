@@ -1,17 +1,17 @@
 Quick Start Guide
 =================
 
-This guide will get you started with Shadow VM in under 5 minutes.
+This guide will get you started with PySpectre in under 5 minutes.
 
 
 Installation
 ------------
 
-Install Shadow VM using pip:
+Install PySpectre using pip:
 
 .. code-block:: bash
 
-   pip install shadow-vm
+   pip install pyspectre
 
 This will also install the Z3 solver as a dependency.
 
@@ -23,7 +23,7 @@ Let's analyze a simple function:
 
 .. code-block:: python
 
-   from shadow_vm import analyze
+   from pyspectre import analyze
 
    def calculate_average(total, count):
        return total / count
@@ -59,7 +59,7 @@ The ``analyze()`` function returns an ``ExecutionResult`` with:
 Safe Code Patterns
 ------------------
 
-Shadow VM recognizes safe patterns. This function won't report issues:
+PySpectre recognizes safe patterns. This function won't report issues:
 
 .. code-block:: python
 
@@ -75,18 +75,18 @@ Shadow VM recognizes safe patterns. This function won't report issues:
 Using the CLI
 -------------
 
-You can also use Shadow VM from the command line:
+You can also use PySpectre from the command line:
 
 .. code-block:: bash
 
    # Analyze a function in a file
-   python -m shadow_vm myfile.py -f my_function
+   pyspectre myfile.py -f my_function
 
    # Output as JSON
-   python -m shadow_vm myfile.py -f my_function --format json
+   pyspectre myfile.py -f my_function --format json
 
    # Specify parameter types
-   python -m shadow_vm myfile.py -f my_function --args x=int y=str
+   pyspectre myfile.py -f my_function --args x=int y=str
 
 
 Next Steps

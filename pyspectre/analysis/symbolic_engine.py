@@ -10,9 +10,7 @@ constraint solving and provides:
 - Symbolic function summaries
 - Concolic execution support
 """
-
 from __future__ import annotations
-
 import dis
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -20,23 +18,17 @@ from enum import Enum, auto
 from typing import (
     Any,
 )
-
 try:
     import z3
-
     HAS_Z3 = True
 except ImportError:
     HAS_Z3 = False
-
     class z3:
         ExprRef = Any
         SortRef = Any
         Solver = Any
-
-
 class SymbolicKind(Enum):
     """Types of symbolic values."""
-
     CONCRETE = auto()
     SYMBOL = auto()
     BINARY_OP = auto()
@@ -48,11 +40,8 @@ class SymbolicKind(Enum):
     CALL = auto()
     UNKNOWN = auto()
     ERROR = auto()
-
-
 class BinaryOp(Enum):
     """Binary operations."""
-
     ADD = auto()
     SUB = auto()
     MUL = auto()
@@ -66,20 +55,14 @@ class BinaryOp(Enum):
     BIT_XOR = auto()
     BIT_AND = auto()
     CONCAT = auto()
-
-
 class UnaryOp(Enum):
     """Unary operations."""
-
     NEG = auto()
     POS = auto()
     INVERT = auto()
     NOT = auto()
-
-
 class CompareOp(Enum):
     """Comparison operations."""
-
     LT = auto()
     LE = auto()
     EQ = auto()
@@ -90,8 +73,6 @@ class CompareOp(Enum):
     IS_NOT = auto()
     IN = auto()
     NOT_IN = auto()
-
-
 @dataclass(frozen=True)
 class SymbolicValue:
     """
@@ -99,7 +80,6 @@ class SymbolicValue:
     Symbolic values form expression trees that can be
     converted to Z3 constraints for solving.
     """
-
     kind: SymbolicKind
     concrete_value: Any = None
     concrete_type: type | None = None
@@ -115,7 +95,6 @@ class SymbolicValue:
     value: SymbolicValue | None = None
     result_type: type | None = None
     source_line: int = 0
-
     @classmethod
     def concrete(cls, value: Any) -> SymbolicValue:
         """Create a concrete value."""
@@ -125,7 +104,6 @@ class SymbolicValue:
             concrete_type=type(value),
             result_type=type(value),
         )
-
     @classmethod
     def symbol(cls, name: str, sym_id: int, result_type: type | None = None) -> SymbolicValue:
         """Create a fresh symbolic value."""
@@ -135,7 +113,6 @@ class SymbolicValue:
             symbol_id=sym_id,
             result_type=result_type,
         )
-
     @classmethod
     def binary(
         cls,
@@ -151,7 +128,6 @@ class SymbolicValue:
             operands=(left, right),
             result_type=result_type,
         )
-
     @classmethod
     def unary(
         cls,
@@ -166,7 +142,6 @@ class SymbolicValue:
             operands=(operand,),
             result_type=result_type,
         )
-
     @classmethod
     def compare(
         cls,
@@ -181,7 +156,6 @@ class SymbolicValue:
             operands=(left, right),
             result_type=bool,
         )
-
     @classmethod
     def ite(
         cls,
@@ -197,7 +171,6 @@ class SymbolicValue:
             else_value=else_val,
             result_type=then_val.result_type,
         )
-
     @classmethod
     def select(cls, base: SymbolicValue, index: SymbolicValue) -> SymbolicValue:
         """Create array/dict select operation."""
@@ -206,7 +179,6 @@ class SymbolicValue:
             base=base,
             index=index,
         )
-
     @classmethod
     def store(
         cls,
@@ -221,7 +193,6 @@ class SymbolicValue:
             index=index,
             value=value,
         )
-
     @classmethod
     def call(
         cls,
@@ -236,33 +207,27 @@ class SymbolicValue:
             operands=args,
             result_type=result_type,
         )
-
     @classmethod
     def unknown(cls) -> SymbolicValue:
         """Create an unknown value."""
         return cls(kind=SymbolicKind.UNKNOWN)
-
     @classmethod
     def error(cls, message: str = "") -> SymbolicValue:
         """Create an error value."""
         return cls(kind=SymbolicKind.ERROR, symbol_name=message)
-
     @property
     def is_concrete(self) -> bool:
         """Check if this is a concrete value."""
         return self.kind == SymbolicKind.CONCRETE
-
     @property
     def is_symbolic(self) -> bool:
         """Check if this is symbolic (not concrete)."""
         return self.kind != SymbolicKind.CONCRETE
-
     def get_concrete(self) -> Any | None:
         """Get concrete value if available."""
         if self.is_concrete:
             return self.concrete_value
         return None
-
     def get_symbols(self) -> set[str]:
         """Get all symbol names used in this expression."""
         symbols: set[str] = set()
@@ -283,7 +248,6 @@ class SymbolicValue:
         if self.value:
             symbols.update(self.value.get_symbols())
         return symbols
-
     def substitute(
         self,
         substitution: dict[str, SymbolicValue],
@@ -319,7 +283,6 @@ class SymbolicValue:
             result_type=self.result_type,
             source_line=self.source_line,
         )
-
     def simplify(self) -> SymbolicValue:
         """Try to simplify the expression."""
         if self.operands:
@@ -372,7 +335,6 @@ class SymbolicValue:
                 source_line=self.source_line,
             )
         return self
-
     def _eval_binary(self, op: BinaryOp, left: Any, right: Any) -> Any:
         """Evaluate a binary operation on concrete values."""
         ops = {
@@ -391,7 +353,6 @@ class SymbolicValue:
             BinaryOp.CONCAT: lambda a, b: a + b,
         }
         return ops[op](left, right)
-
     def _eval_unary(self, op: UnaryOp, operand: Any) -> Any:
         """Evaluate a unary operation on a concrete value."""
         ops = {
@@ -401,7 +362,6 @@ class SymbolicValue:
             UnaryOp.NOT: lambda a: not a,
         }
         return ops[op](operand)
-
     def __repr__(self) -> str:
         if self.is_concrete:
             return f"Concrete({self.concrete_value!r})"
@@ -416,35 +376,27 @@ class SymbolicValue:
         if self.kind == SymbolicKind.ITE:
             return f"(if {self.condition} then {self.then_value} else {self.else_value})"
         return f"<{self.kind.name}>"
-
-
 @dataclass
 class PathCondition:
     """
     Represents the path condition - constraints that must be
     true for execution to reach a particular program point.
     """
-
     constraints: list[SymbolicValue] = field(default_factory=list)
-
     def add(self, constraint: SymbolicValue) -> None:
         """Add a constraint to the path condition."""
         self.constraints.append(constraint)
-
     def copy(self) -> PathCondition:
         """Create a copy of this path condition."""
         return PathCondition(list(self.constraints))
-
     def merge(self, other: PathCondition) -> PathCondition:
         """Merge two path conditions (for join points)."""
         return PathCondition(self.constraints + other.constraints)
-
     def is_satisfiable(self, solver: ConstraintSolver | None = None) -> bool:
         """Check if the path condition is satisfiable."""
         if not solver:
             return True
         return solver.check_satisfiable(self.constraints)
-
     def implies(
         self,
         constraint: SymbolicValue,
@@ -454,26 +406,20 @@ class PathCondition:
         if not solver:
             return None
         return solver.check_implies(self.constraints, constraint)
-
-
 @dataclass
 class SymbolicObject:
     """A symbolic object on the heap."""
-
     object_id: int
     type_name: str
     fields: dict[str, SymbolicValue] = field(default_factory=dict)
     elements: dict[SymbolicValue, SymbolicValue] = field(default_factory=dict)
     length: SymbolicValue | None = None
     created_at_line: int = 0
-
-
 @dataclass
 class SymbolicState:
     """
     Complete symbolic state at a program point.
     """
-
     locals: dict[str, SymbolicValue] = field(default_factory=dict)
     stack: list[SymbolicValue] = field(default_factory=list)
     path_condition: PathCondition = field(default_factory=PathCondition)
@@ -483,7 +429,6 @@ class SymbolicState:
     globals: dict[str, SymbolicValue] = field(default_factory=dict)
     pc: int = 0
     line: int = 0
-
     def copy(self) -> SymbolicState:
         """Create a deep copy of this state."""
         new_state = SymbolicState(
@@ -498,7 +443,6 @@ class SymbolicState:
             line=self.line,
         )
         return new_state
-
     def fresh_symbol(self, name: str, result_type: type | None = None) -> SymbolicValue:
         """Create a fresh symbolic value."""
         sym = SymbolicValue.symbol(
@@ -508,7 +452,6 @@ class SymbolicState:
         )
         self.next_symbol_id += 1
         return sym
-
     def allocate_object(self, type_name: str, line: int = 0) -> SymbolicObject:
         """Allocate a new symbolic object."""
         obj = SymbolicObject(
@@ -519,44 +462,34 @@ class SymbolicState:
         self.heap[self.next_object_id] = obj
         self.next_object_id += 1
         return obj
-
     def push(self, value: SymbolicValue) -> None:
         """Push value onto stack."""
         self.stack.append(value)
-
     def pop(self) -> SymbolicValue:
         """Pop value from stack."""
         if self.stack:
             return self.stack.pop()
         return SymbolicValue.unknown()
-
     def peek(self, depth: int = 0) -> SymbolicValue:
         """Peek at stack value."""
         idx = -(depth + 1)
         if abs(idx) <= len(self.stack):
             return self.stack[idx]
         return SymbolicValue.unknown()
-
     def get_local(self, name: str) -> SymbolicValue:
         """Get local variable value."""
         return self.locals.get(name, SymbolicValue.unknown())
-
     def set_local(self, name: str, value: SymbolicValue) -> None:
         """Set local variable value."""
         self.locals[name] = value
-
     def add_constraint(self, constraint: SymbolicValue) -> None:
         """Add constraint to path condition."""
         self.path_condition.add(constraint)
-
-
 class ConstraintSolver(ABC):
     """Abstract interface for constraint solving."""
-
     @abstractmethod
     def check_satisfiable(self, constraints: list[SymbolicValue]) -> bool:
         """Check if constraints are satisfiable."""
-
     @abstractmethod
     def check_implies(
         self,
@@ -564,24 +497,19 @@ class ConstraintSolver(ABC):
         conclusion: SymbolicValue,
     ) -> bool | None:
         """Check if premises imply conclusion."""
-
     @abstractmethod
     def get_model(
         self,
         constraints: list[SymbolicValue],
     ) -> dict[str, Any] | None:
         """Get a satisfying assignment if constraints are satisfiable."""
-
-
 class Z3Solver(ConstraintSolver):
     """Z3-based constraint solver."""
-
     def __init__(self) -> None:
         if not HAS_Z3:
             raise ImportError("Z3 is required for Z3Solver")
         self._solver = z3.Solver()
         self._symbols: dict[str, z3.ExprRef] = {}
-
     def check_satisfiable(self, constraints: list[SymbolicValue]) -> bool:
         """Check if constraints are satisfiable."""
         self._solver.reset()
@@ -590,7 +518,6 @@ class Z3Solver(ConstraintSolver):
             if z3_expr is not None:
                 self._solver.add(z3_expr)
         return self._solver.check() == z3.sat
-
     def check_implies(
         self,
         premises: list[SymbolicValue],
@@ -613,7 +540,6 @@ class Z3Solver(ConstraintSolver):
             return False
         else:
             return None
-
     def get_model(
         self,
         constraints: list[SymbolicValue],
@@ -639,7 +565,6 @@ class Z3Solver(ConstraintSolver):
             else:
                 result[name] = str(val)
         return result
-
     def _to_z3(self, sym: SymbolicValue) -> z3.ExprRef | None:
         """Convert symbolic value to Z3 expression."""
         if sym.kind == SymbolicKind.CONCRETE:
@@ -705,14 +630,11 @@ class Z3Solver(ConstraintSolver):
             if cond is not None and then_v is not None and else_v is not None:
                 return z3.If(cond, then_v, else_v)
         return None
-
-
 class SimpleSolver(ConstraintSolver):
     """
     Simple constraint solver without Z3.
     Uses constant propagation and simple pattern matching.
     """
-
     def check_satisfiable(self, constraints: list[SymbolicValue]) -> bool:
         """Conservative: assume satisfiable unless obviously not."""
         for constraint in constraints:
@@ -721,7 +643,6 @@ class SimpleSolver(ConstraintSolver):
                 if not simplified.concrete_value:
                     return False
         return True
-
     def check_implies(
         self,
         premises: list[SymbolicValue],
@@ -735,7 +656,6 @@ class SimpleSolver(ConstraintSolver):
             if self._expressions_equal(premise, conclusion):
                 return True
         return None
-
     def get_model(
         self,
         constraints: list[SymbolicValue],
@@ -745,7 +665,6 @@ class SimpleSolver(ConstraintSolver):
         for constraint in constraints:
             symbols.update(constraint.get_symbols())
         return dict.fromkeys(symbols, 0)
-
     def _expressions_equal(self, a: SymbolicValue, b: SymbolicValue) -> bool:
         """Check if two expressions are structurally equal."""
         if a.kind != b.kind:
@@ -761,24 +680,18 @@ class SimpleSolver(ConstraintSolver):
         return all(
             self._expressions_equal(op_a, op_b) for op_a, op_b in zip(a.operands, b.operands)
         )
-
-
 @dataclass
 class ExecutionPath:
     """A single execution path through the program."""
-
     state: SymbolicState
     terminated: bool = False
     error: str | None = None
     return_value: SymbolicValue | None = None
     warnings: list[str] = field(default_factory=list)
-
-
 class SymbolicExecutor:
     """
     Symbolic execution engine for Python bytecode.
     """
-
     def __init__(self, solver: ConstraintSolver | None = None) -> None:
         if solver:
             self.solver = solver
@@ -789,7 +702,6 @@ class SymbolicExecutor:
         self.paths: list[ExecutionPath] = []
         self.max_paths = 100
         self.max_iterations = 1000
-
     def execute(
         self,
         code: Any,
@@ -807,7 +719,6 @@ class SymbolicExecutor:
         initial_path = ExecutionPath(state=initial_state)
         self._execute_path(initial_path, code)
         return self.paths
-
     def _execute_path(self, path: ExecutionPath, code: Any) -> None:
         """Execute a single path."""
         instructions = list(dis.get_instructions(code))
@@ -829,7 +740,6 @@ class SymbolicExecutor:
             path.error = "Max iterations exceeded"
             path.terminated = True
         self.paths.append(path)
-
     def _execute_instruction(
         self,
         path: ExecutionPath,
@@ -923,7 +833,6 @@ class SymbolicExecutor:
         else:
             pass
         state.pc = next_pc
-
     def _execute_binary_op(self, path: ExecutionPath, instr: dis.Instruction) -> None:
         """Execute a binary operation."""
         state = path.state
@@ -962,7 +871,6 @@ class SymbolicExecutor:
             return
         result = SymbolicValue.binary(op, left, right)
         state.push(result.simplify())
-
     def _execute_compare(self, path: ExecutionPath, instr: dis.Instruction) -> None:
         """Execute a comparison operation."""
         state = path.state
@@ -984,7 +892,6 @@ class SymbolicExecutor:
         op = op_map.get(cmp_name, CompareOp.EQ)
         result = SymbolicValue.compare(op, left, right)
         state.push(result.simplify())
-
     def _execute_conditional_jump(
         self,
         path: ExecutionPath,
@@ -1022,7 +929,6 @@ class SymbolicExecutor:
             self._execute_path(forked_path, code)
         else:
             state.pc = fall_through
-
     def _execute_call(self, path: ExecutionPath, instr: dis.Instruction) -> None:
         """Execute a function call."""
         state = path.state
@@ -1033,7 +939,6 @@ class SymbolicExecutor:
         func = state.pop()
         result = SymbolicValue.call(func, tuple(args))
         state.push(result)
-
     def _check_division(self, path: ExecutionPath, divisor: SymbolicValue) -> None:
         """Check for division by zero."""
         zero = SymbolicValue.concrete(0)
@@ -1042,7 +947,6 @@ class SymbolicExecutor:
         test_constraints.append(may_be_zero)
         if self.solver.check_satisfiable(test_constraints):
             path.warnings.append(f"Line {path.state.line}: Possible division by zero")
-
     def _check_subscript(
         self,
         path: ExecutionPath,
@@ -1050,16 +954,12 @@ class SymbolicExecutor:
         index: SymbolicValue,
     ) -> None:
         """Check for out-of-bounds subscript."""
-
-
 class SymbolicAnalyzer:
     """
     High-level interface for symbolic analysis.
     """
-
     def __init__(self) -> None:
         self.executor = SymbolicExecutor()
-
     def analyze_function(
         self,
         code: Any,

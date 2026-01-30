@@ -12,14 +12,10 @@ Each operation is modeled to produce:
 2. Constraints that must hold for the operation
 3. The mutated collection (for mutable types)
 """
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Any
-
 import z3
-
 from .memory_model import SymbolicArray, SymbolicMap
 from .symbolic_types import (
     SymbolicBool,
@@ -30,8 +26,6 @@ from .symbolic_types import (
     SymbolicString,
     SymbolicTuple,
 )
-
-
 @dataclass
 class OpResult:
     """
@@ -39,29 +33,23 @@ class OpResult:
     Contains the result value, any constraints generated,
     and side effects (for mutable operations).
     """
-
     value: Any
     constraints: list[z3.BoolRef] = field(default_factory=list)
     modified_collection: Any = None
     error: str | None = None
-
     @property
     def success(self) -> bool:
         return self.error is None
-
     def with_constraint(self, constraint: z3.BoolRef) -> OpResult:
         """Add a constraint and return self for chaining."""
         self.constraints.append(constraint)
         return self
-
-
 class SymbolicListOps:
     """
     Symbolic operations for Python lists.
     All operations work with either concrete Python lists or
     SymbolicList/SymbolicArray objects.
     """
-
     @staticmethod
     def length(lst: list | SymbolicList | SymbolicArray) -> OpResult:
         """Get the length of a list."""
@@ -73,7 +61,6 @@ class SymbolicListOps:
             return OpResult(value=lst.length)
         else:
             return OpResult(value=None, error=f"Cannot get length of {type(lst)}")
-
     @staticmethod
     def getitem(
         lst: list | SymbolicList | SymbolicArray, index: int | z3.ArithRef | SymbolicInt
@@ -110,7 +97,6 @@ class SymbolicListOps:
             bounds = lst.in_bounds(idx)
             return OpResult(value=result, constraints=[bounds])
         return OpResult(value=None, error=f"Cannot index {type(lst)}")
-
     @staticmethod
     def setitem(
         lst: list | SymbolicArray, index: int | z3.ArithRef | SymbolicInt, value: Any
@@ -147,7 +133,6 @@ class SymbolicListOps:
             bounds = lst.in_bounds(idx)
             return OpResult(value=None, modified_collection=new_array, constraints=[bounds])
         return OpResult(value=None, error=f"Cannot set item on {type(lst)}")
-
     @staticmethod
     def append(lst: list | SymbolicArray, value: Any) -> OpResult:
         """Append an item to the list."""
@@ -164,7 +149,6 @@ class SymbolicListOps:
             new_array = lst.append(z3_val)
             return OpResult(value=None, modified_collection=new_array)
         return OpResult(value=None, error=f"Cannot append to {type(lst)}")
-
     @staticmethod
     def extend(lst: list | SymbolicArray, items: list | SymbolicArray) -> OpResult:
         """Extend list with items from another iterable."""
@@ -184,7 +168,6 @@ class SymbolicListOps:
                     result = result.append(z3_val)
                 return OpResult(value=None, modified_collection=result)
         return OpResult(value=None, error=f"Cannot extend {type(lst)} with {type(items)}")
-
     @staticmethod
     def pop(lst: list | SymbolicArray, index: int | z3.ArithRef | None = None) -> OpResult:
         """Remove and return item at index (default last)."""
@@ -222,7 +205,6 @@ class SymbolicListOps:
             new_array._length = lst._length - 1
             return OpResult(value=value, modified_collection=new_array, constraints=constraints)
         return OpResult(value=None, error=f"Cannot pop from {type(lst)}")
-
     @staticmethod
     def insert(lst: list | SymbolicArray, index: int | z3.ArithRef, value: Any) -> OpResult:
         """Insert item at index."""
@@ -255,7 +237,6 @@ class SymbolicListOps:
                 new_array = lst.append(z3_val)
                 return OpResult(value=None, modified_collection=new_array)
         return OpResult(value=None, error=f"Cannot insert into {type(lst)}")
-
     @staticmethod
     def remove(lst: list | SymbolicArray, value: Any) -> OpResult:
         """Remove first occurrence of value."""
@@ -280,7 +261,6 @@ class SymbolicListOps:
                 value=None, modified_collection=new_array, constraints=[exists_constraint]
             )
         return OpResult(value=None, error=f"Cannot remove from {type(lst)}")
-
     @staticmethod
     def index(
         lst: list | SymbolicArray, value: Any, start: int = 0, stop: int | None = None
@@ -311,7 +291,6 @@ class SymbolicListOps:
                 constraints.append(result_idx < stop)
             return OpResult(value=SymbolicInt(result_idx), constraints=constraints)
         return OpResult(value=None, error=f"Cannot find index in {type(lst)}")
-
     @staticmethod
     def count(lst: list | SymbolicArray, value: Any) -> OpResult:
         """Count occurrences of value."""
@@ -327,7 +306,6 @@ class SymbolicListOps:
             constraints = [count_var >= 0, count_var <= lst.length]
             return OpResult(value=SymbolicInt(count_var), constraints=constraints)
         return OpResult(value=None, error=f"Cannot count in {type(lst)}")
-
     @staticmethod
     def reverse(lst: list | SymbolicArray) -> OpResult:
         """Reverse list in place."""
@@ -339,7 +317,6 @@ class SymbolicListOps:
             new_array._length = lst._length
             return OpResult(value=None, modified_collection=new_array)
         return OpResult(value=None, error=f"Cannot reverse {type(lst)}")
-
     @staticmethod
     def contains(lst: list | SymbolicArray, value: Any) -> OpResult:
         """Check if value is in list."""
@@ -357,7 +334,6 @@ class SymbolicListOps:
             constraints = [result == exists]
             return OpResult(value=SymbolicBool(result), constraints=constraints)
         return OpResult(value=None, error=f"Cannot check containment in {type(lst)}")
-
     @staticmethod
     def slice(
         lst: list | SymbolicArray,
@@ -384,7 +360,6 @@ class SymbolicListOps:
                 new_array._length = z3.If(e > s, e - s, z3.IntVal(0))
             return OpResult(value=new_array)
         return OpResult(value=None, error=f"Cannot slice {type(lst)}")
-
     @staticmethod
     def concatenate(lst1: list | SymbolicArray, lst2: list | SymbolicArray) -> OpResult:
         """Concatenate two lists."""
@@ -395,13 +370,10 @@ class SymbolicListOps:
             new_array._length = lst1.length + lst2.length
             return OpResult(value=new_array)
         return OpResult(value=None, error=f"Cannot concatenate {type(lst1)} and {type(lst2)}")
-
-
 class SymbolicDictOps:
     """
     Symbolic operations for Python dicts.
     """
-
     @staticmethod
     def length(d: dict | SymbolicDict | SymbolicMap) -> OpResult:
         """Get number of keys in dict."""
@@ -413,7 +385,6 @@ class SymbolicDictOps:
             length_var = z3.Int(f"dict_len_{id(d)}")
             return OpResult(value=SymbolicInt(length_var), constraints=[length_var >= 0])
         return OpResult(value=None, error=f"Cannot get length of {type(d)}")
-
     @staticmethod
     def getitem(d: dict | SymbolicDict | SymbolicMap, key: Any) -> OpResult:
         """Get value for key."""
@@ -436,7 +407,6 @@ class SymbolicDictOps:
             has_key = d.contains(z3_key)
             return OpResult(value=result, constraints=[has_key])
         return OpResult(value=None, error=f"Cannot get item from {type(d)}")
-
     @staticmethod
     def setitem(d: dict | SymbolicMap, key: Any, value: Any) -> OpResult:
         """Set value for key."""
@@ -457,7 +427,6 @@ class SymbolicDictOps:
             new_map = d.set(z3_key, z3_val)
             return OpResult(value=None, modified_collection=new_map)
         return OpResult(value=None, error=f"Cannot set item on {type(d)}")
-
     @staticmethod
     def delitem(d: dict | SymbolicMap, key: Any) -> OpResult:
         """Delete key from dict."""
@@ -477,7 +446,6 @@ class SymbolicDictOps:
             new_map = d.delete(z3_key)
             return OpResult(value=None, modified_collection=new_map, constraints=[has_key])
         return OpResult(value=None, error=f"Cannot delete from {type(d)}")
-
     @staticmethod
     def get(d: dict | SymbolicMap, key: Any, default: Any = None) -> OpResult:
         """Get value for key with default."""
@@ -497,7 +465,6 @@ class SymbolicDictOps:
             result = d.get(z3_key, z3_default)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot get from {type(d)}")
-
     @staticmethod
     def contains(d: dict | SymbolicMap, key: Any) -> OpResult:
         """Check if key is in dict."""
@@ -512,7 +479,6 @@ class SymbolicDictOps:
             result = d.contains(z3_key)
             return OpResult(value=SymbolicBool(result))
         return OpResult(value=None, error=f"Cannot check containment in {type(d)}")
-
     @staticmethod
     def pop(d: dict | SymbolicMap, key: Any, default: Any = None) -> OpResult:
         """Remove and return value for key."""
@@ -544,7 +510,6 @@ class SymbolicDictOps:
             new_map = d.delete(z3_key)
             return OpResult(value=value, modified_collection=new_map)
         return OpResult(value=None, error=f"Cannot pop from {type(d)}")
-
     @staticmethod
     def setdefault(d: dict | SymbolicMap, key: Any, default: Any = None) -> OpResult:
         """Get value for key, setting default if not present."""
@@ -574,7 +539,6 @@ class SymbolicDictOps:
             final_map = d.set(z3_key, result)
             return OpResult(value=result, modified_collection=final_map)
         return OpResult(value=None, error=f"Cannot setdefault on {type(d)}")
-
     @staticmethod
     def update(d: dict | SymbolicMap, other: dict | SymbolicMap) -> OpResult:
         """Update dict with key-value pairs from other."""
@@ -593,34 +557,28 @@ class SymbolicDictOps:
                 result = result.set(z3_key, z3_val)
             return OpResult(value=None, modified_collection=result)
         return OpResult(value=None, error=f"Cannot update {type(d)} with {type(other)}")
-
     @staticmethod
     def keys(d: dict | SymbolicMap) -> OpResult:
         """Get dict keys."""
         if isinstance(d, dict):
             return OpResult(value=list(d.keys()))
         return OpResult(value=None, error="Cannot enumerate keys of symbolic map")
-
     @staticmethod
     def values(d: dict | SymbolicMap) -> OpResult:
         """Get dict values."""
         if isinstance(d, dict):
             return OpResult(value=list(d.values()))
         return OpResult(value=None, error="Cannot enumerate values of symbolic map")
-
     @staticmethod
     def items(d: dict | SymbolicMap) -> OpResult:
         """Get dict items."""
         if isinstance(d, dict):
             return OpResult(value=list(d.items()))
         return OpResult(value=None, error="Cannot enumerate items of symbolic map")
-
-
 class SymbolicSetOps:
     """
     Symbolic operations for Python sets.
     """
-
     @staticmethod
     def length(s: set | SymbolicSet) -> OpResult:
         """Get set cardinality."""
@@ -629,7 +587,6 @@ class SymbolicSetOps:
         elif isinstance(s, SymbolicSet):
             return OpResult(value=s.length)
         return OpResult(value=None, error=f"Cannot get length of {type(s)}")
-
     @staticmethod
     def contains(s: set | SymbolicSet, value: Any) -> OpResult:
         """Check if value is in set."""
@@ -639,7 +596,6 @@ class SymbolicSetOps:
             result = s.contains(value)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot check containment in {type(s)}")
-
     @staticmethod
     def add(s: set | SymbolicSet, value: Any) -> OpResult:
         """Add value to set."""
@@ -650,7 +606,6 @@ class SymbolicSetOps:
             new_set = s.add(value)
             return OpResult(value=None, modified_collection=new_set)
         return OpResult(value=None, error=f"Cannot add to {type(s)}")
-
     @staticmethod
     def remove(s: set | SymbolicSet, value: Any) -> OpResult:
         """Remove value from set (raises error if not present)."""
@@ -665,7 +620,6 @@ class SymbolicSetOps:
             new_set = s.remove(value)
             return OpResult(value=None, modified_collection=new_set, constraints=[has_value.value])
         return OpResult(value=None, error=f"Cannot remove from {type(s)}")
-
     @staticmethod
     def discard(s: set | SymbolicSet, value: Any) -> OpResult:
         """Remove value from set if present."""
@@ -676,7 +630,6 @@ class SymbolicSetOps:
             new_set = s.remove(value)
             return OpResult(value=None, modified_collection=new_set)
         return OpResult(value=None, error=f"Cannot discard from {type(s)}")
-
     @staticmethod
     def pop(s: set | SymbolicSet) -> OpResult:
         """Remove and return arbitrary element."""
@@ -690,7 +643,6 @@ class SymbolicSetOps:
             result = SymbolicInt(z3.Int(f"set_pop_{id(s)}"))
             return OpResult(value=result, constraints=constraints)
         return OpResult(value=None, error=f"Cannot pop from {type(s)}")
-
     @staticmethod
     def union(s1: set | SymbolicSet, s2: set | SymbolicSet) -> OpResult:
         """Return union of two sets."""
@@ -700,7 +652,6 @@ class SymbolicSetOps:
             result = s1.union(s2)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot union {type(s1)} and {type(s2)}")
-
     @staticmethod
     def intersection(s1: set | SymbolicSet, s2: set | SymbolicSet) -> OpResult:
         """Return intersection of two sets."""
@@ -710,7 +661,6 @@ class SymbolicSetOps:
             result = s1.intersection(s2)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot intersect {type(s1)} and {type(s2)}")
-
     @staticmethod
     def difference(s1: set | SymbolicSet, s2: set | SymbolicSet) -> OpResult:
         """Return difference of two sets (s1 - s2)."""
@@ -720,7 +670,6 @@ class SymbolicSetOps:
             result = s1.difference(s2)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot difference {type(s1)} and {type(s2)}")
-
     @staticmethod
     def symmetric_difference(s1: set | SymbolicSet, s2: set | SymbolicSet) -> OpResult:
         """Return symmetric difference of two sets."""
@@ -732,7 +681,6 @@ class SymbolicSetOps:
             result = diff1.union(diff2)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot symmetric_difference {type(s1)} and {type(s2)}")
-
     @staticmethod
     def issubset(s1: set | SymbolicSet, s2: set | SymbolicSet) -> OpResult:
         """Check if s1 is subset of s2."""
@@ -742,7 +690,6 @@ class SymbolicSetOps:
             result = s1.issubset(s2)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot check subset of {type(s1)} and {type(s2)}")
-
     @staticmethod
     def issuperset(s1: set | SymbolicSet, s2: set | SymbolicSet) -> OpResult:
         """Check if s1 is superset of s2."""
@@ -752,7 +699,6 @@ class SymbolicSetOps:
             result = s2.issubset(s1)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot check superset of {type(s1)} and {type(s2)}")
-
     @staticmethod
     def isdisjoint(s1: set | SymbolicSet, s2: set | SymbolicSet) -> OpResult:
         """Check if sets have no common elements."""
@@ -763,13 +709,10 @@ class SymbolicSetOps:
             result = SymbolicBool(inter.length.value == 0)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot check disjoint of {type(s1)} and {type(s2)}")
-
-
 class SymbolicTupleOps:
     """
     Symbolic operations for Python tuples (immutable).
     """
-
     @staticmethod
     def length(t: tuple | SymbolicTuple) -> OpResult:
         """Get tuple length."""
@@ -778,7 +721,6 @@ class SymbolicTupleOps:
         elif isinstance(t, SymbolicTuple):
             return OpResult(value=len(t._elements))
         return OpResult(value=None, error=f"Cannot get length of {type(t)}")
-
     @staticmethod
     def getitem(t: tuple | SymbolicTuple, index: int | z3.ArithRef | SymbolicInt) -> OpResult:
         """Get item at index."""
@@ -810,7 +752,6 @@ class SymbolicTupleOps:
                 constraints = [idx >= 0, idx < len(t._elements)]
                 return OpResult(value=result, constraints=constraints)
         return OpResult(value=None, error=f"Cannot index {type(t)}")
-
     @staticmethod
     def count(t: tuple | SymbolicTuple, value: Any) -> OpResult:
         """Count occurrences of value."""
@@ -823,7 +764,6 @@ class SymbolicTupleOps:
                     count += 1
             return OpResult(value=count)
         return OpResult(value=None, error=f"Cannot count in {type(t)}")
-
     @staticmethod
     def index(
         t: tuple | SymbolicTuple, value: Any, start: int = 0, stop: int | None = None
@@ -846,7 +786,6 @@ class SymbolicTupleOps:
                     return OpResult(value=i)
             return OpResult(value=None, error="ValueError: x not in tuple")
         return OpResult(value=None, error=f"Cannot find index in {type(t)}")
-
     @staticmethod
     def slice(
         t: tuple | SymbolicTuple,
@@ -861,7 +800,6 @@ class SymbolicTupleOps:
             elements = t._elements[start:stop:step]
             return OpResult(value=SymbolicTuple(elements))
         return OpResult(value=None, error=f"Cannot slice {type(t)}")
-
     @staticmethod
     def concatenate(t1: tuple | SymbolicTuple, t2: tuple | SymbolicTuple) -> OpResult:
         """Concatenate two tuples."""
@@ -871,7 +809,6 @@ class SymbolicTupleOps:
             elements = t1._elements + t2._elements
             return OpResult(value=SymbolicTuple(elements))
         return OpResult(value=None, error=f"Cannot concatenate {type(t1)} and {type(t2)}")
-
     @staticmethod
     def contains(t: tuple | SymbolicTuple, value: Any) -> OpResult:
         """Check if value is in tuple."""
@@ -883,13 +820,10 @@ class SymbolicTupleOps:
                     return OpResult(value=True)
             return OpResult(value=False)
         return OpResult(value=None, error=f"Cannot check containment in {type(t)}")
-
-
 class SymbolicStringOps:
     """
     Symbolic operations for Python strings.
     """
-
     @staticmethod
     def length(s: str | SymbolicString) -> OpResult:
         """Get string length."""
@@ -898,7 +832,6 @@ class SymbolicStringOps:
         elif isinstance(s, SymbolicString):
             return OpResult(value=s.length)
         return OpResult(value=None, error=f"Cannot get length of {type(s)}")
-
     @staticmethod
     def contains(s: str | SymbolicString, substr: str | SymbolicString) -> OpResult:
         """Check if substring is in string."""
@@ -908,7 +841,6 @@ class SymbolicStringOps:
             result = s.contains(substr)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot check containment in {type(s)}")
-
     @staticmethod
     def concatenate(s1: str | SymbolicString, s2: str | SymbolicString) -> OpResult:
         """Concatenate two strings."""
@@ -921,7 +853,6 @@ class SymbolicStringOps:
                 result = s2.__radd__(s1)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot concatenate {type(s1)} and {type(s2)}")
-
     @staticmethod
     def startswith(s: str | SymbolicString, prefix: str | SymbolicString) -> OpResult:
         """Check if string starts with prefix."""
@@ -931,7 +862,6 @@ class SymbolicStringOps:
             result = s.startswith(prefix)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot check startswith on {type(s)}")
-
     @staticmethod
     def endswith(s: str | SymbolicString, suffix: str | SymbolicString) -> OpResult:
         """Check if string ends with suffix."""
@@ -941,8 +871,6 @@ class SymbolicStringOps:
             result = s.endswith(suffix)
             return OpResult(value=result)
         return OpResult(value=None, error=f"Cannot check endswith on {type(s)}")
-
-
 __all__ = [
     "OpResult",
     "SymbolicListOps",

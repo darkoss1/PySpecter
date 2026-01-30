@@ -9,9 +9,7 @@ Features:
 - Type state tracking across control flow
 - Pattern-based type inference for common idioms
 """
-
 from __future__ import annotations
-
 import inspect
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
@@ -22,11 +20,8 @@ from typing import (
     Union,
     get_type_hints,
 )
-
-
 class TypeKind(Enum):
     """Enumeration of Python type categories."""
-
     NONE = auto()
     BOOL = auto()
     INT = auto()
@@ -59,8 +54,6 @@ class TypeKind(Enum):
     CALLABLE = auto()
     UNKNOWN = auto()
     BOTTOM = auto()
-
-
 @dataclass(frozen=True)
 class PyType:
     """
@@ -72,7 +65,6 @@ class PyType:
     - Value constraints (Literal types, enum values)
     - Nullability
     """
-
     kind: TypeKind
     name: str = ""
     params: tuple[PyType, ...] = ()
@@ -83,7 +75,6 @@ class PyType:
     nullable: bool = False
     confidence: float = 1.0
     source: str = "inferred"
-
     def __hash__(self) -> int:
         return hash(
             (
@@ -95,7 +86,6 @@ class PyType:
                 self.nullable,
             )
         )
-
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, PyType):
             return False
@@ -106,43 +96,35 @@ class PyType:
             and self.literal_values == other.literal_values
             and self.class_name == other.class_name
         )
-
     @classmethod
     def none(cls) -> PyType:
         """Create None type."""
         return cls(kind=TypeKind.NONE, name="None")
-
     @classmethod
     def bool_(cls) -> PyType:
         """Create bool type."""
         return cls(kind=TypeKind.BOOL, name="bool")
-
     @classmethod
     def int_(cls) -> PyType:
         """Create int type."""
         return cls(kind=TypeKind.INT, name="int")
-
     @classmethod
     def float_(cls) -> PyType:
         """Create float type."""
         return cls(kind=TypeKind.FLOAT, name="float")
-
     @classmethod
     def str_(cls) -> PyType:
         """Create str type."""
         return cls(kind=TypeKind.STR, name="str")
-
     @classmethod
     def bytes_(cls) -> PyType:
         """Create bytes type."""
         return cls(kind=TypeKind.BYTES, name="bytes")
-
     @classmethod
     def list_(cls, element_type: PyType | None = None) -> PyType:
         """Create list type with optional element type."""
         params = (element_type,) if element_type else ()
         return cls(kind=TypeKind.LIST, name="list", params=params)
-
     @classmethod
     def dict_(
         cls,
@@ -154,7 +136,6 @@ class PyType:
         if key_type and value_type:
             params = (key_type, value_type)
         return cls(kind=TypeKind.DICT, name="dict", params=params)
-
     @classmethod
     def defaultdict_(
         cls,
@@ -166,24 +147,20 @@ class PyType:
         if key_type and value_type:
             params = (key_type, value_type)
         return cls(kind=TypeKind.DEFAULTDICT, name="defaultdict", params=params)
-
     @classmethod
     def set_(cls, element_type: PyType | None = None) -> PyType:
         """Create set type with optional element type."""
         params = (element_type,) if element_type else ()
         return cls(kind=TypeKind.SET, name="set", params=params)
-
     @classmethod
     def tuple_(cls, *element_types: PyType) -> PyType:
         """Create tuple type with element types."""
         return cls(kind=TypeKind.TUPLE, name="tuple", params=element_types)
-
     @classmethod
     def deque_(cls, element_type: PyType | None = None) -> PyType:
         """Create deque type with optional element type."""
         params = (element_type,) if element_type else ()
         return cls(kind=TypeKind.DEQUE, name="deque", params=params)
-
     @classmethod
     def union_(cls, *types: PyType) -> PyType:
         """Create union type."""
@@ -200,12 +177,10 @@ class PyType:
             name="Union",
             union_members=frozenset(members),
         )
-
     @classmethod
     def optional_(cls, inner_type: PyType) -> PyType:
         """Create Optional type (Union with None)."""
         return cls.union_(inner_type, cls.none())
-
     @classmethod
     def literal_(cls, *values: Any) -> PyType:
         """Create Literal type with specific values."""
@@ -214,22 +189,18 @@ class PyType:
             name="Literal",
             literal_values=frozenset(values),
         )
-
     @classmethod
     def any_(cls) -> PyType:
         """Create Any type."""
         return cls(kind=TypeKind.ANY, name="Any")
-
     @classmethod
     def unknown(cls) -> PyType:
         """Create unknown type."""
         return cls(kind=TypeKind.UNKNOWN, name="?")
-
     @classmethod
     def bottom(cls) -> PyType:
         """Create bottom type (empty/unreachable)."""
         return cls(kind=TypeKind.BOTTOM, name="⊥")
-
     @classmethod
     def instance(cls, class_name: str, **attributes: PyType) -> PyType:
         """Create instance type for a class."""
@@ -239,7 +210,6 @@ class PyType:
             class_name=class_name,
             attributes=attributes,
         )
-
     @classmethod
     def callable_(
         cls,
@@ -253,11 +223,9 @@ class PyType:
             name="Callable",
             params=(*params, ret),
         )
-
     def is_numeric(self) -> bool:
         """Check if this is a numeric type."""
         return self.kind in {TypeKind.INT, TypeKind.FLOAT, TypeKind.COMPLEX}
-
     def is_collection(self) -> bool:
         """Check if this is a collection type."""
         return self.kind in {
@@ -269,15 +237,12 @@ class PyType:
             TypeKind.DEFAULTDICT,
             TypeKind.DEQUE,
         }
-
     def is_mapping(self) -> bool:
         """Check if this is a mapping type."""
         return self.kind in {TypeKind.DICT, TypeKind.DEFAULTDICT}
-
     def is_sequence(self) -> bool:
         """Check if this is a sequence type."""
         return self.kind in {TypeKind.LIST, TypeKind.TUPLE, TypeKind.DEQUE, TypeKind.STR}
-
     def is_subscriptable(self) -> bool:
         """Check if this type supports subscript operations."""
         return self.kind in {
@@ -289,7 +254,6 @@ class PyType:
             TypeKind.BYTES,
             TypeKind.DEQUE,
         }
-
     def is_nullable(self) -> bool:
         """Check if this type can be None."""
         if self.kind == TypeKind.NONE:
@@ -299,7 +263,6 @@ class PyType:
         if self.kind == TypeKind.UNION:
             return any(m.kind == TypeKind.NONE for m in self.union_members)
         return False
-
     def is_definitely_not_none(self) -> bool:
         """Check if this type definitely cannot be None."""
         if self.kind == TypeKind.NONE:
@@ -309,31 +272,26 @@ class PyType:
         if self.kind == TypeKind.UNION:
             return not any(m.kind == TypeKind.NONE for m in self.union_members)
         return True
-
     def get_element_type(self) -> PyType:
         """Get element type for collections."""
         if self.params and len(self.params) >= 1:
             return self.params[0]
         return PyType.any_()
-
     def get_key_type(self) -> PyType:
         """Get key type for mappings."""
         if self.params and len(self.params) >= 1:
             return self.params[0]
         return PyType.any_()
-
     def get_value_type(self) -> PyType:
         """Get value type for mappings."""
         if self.params and len(self.params) >= 2:
             return self.params[1]
         return PyType.any_()
-
     def get_return_type(self) -> PyType:
         """Get return type for callables."""
         if self.kind == TypeKind.CALLABLE and self.params:
             return self.params[-1]
         return PyType.any_()
-
     def without_none(self) -> PyType:
         """Return this type with None removed from union."""
         if self.kind == TypeKind.NONE:
@@ -346,7 +304,6 @@ class PyType:
                 return non_none[0]
             return PyType.union_(*non_none)
         return self
-
     def join(self, other: PyType) -> PyType:
         """Compute least upper bound (join) of two types."""
         if self == other:
@@ -386,7 +343,6 @@ class PyType:
                 )
             return PyType(kind=self.kind, name=self.name)
         return PyType.union_(self, other)
-
     def meet(self, other: PyType) -> PyType:
         """Compute greatest lower bound (meet) of two types."""
         if self == other:
@@ -411,7 +367,6 @@ class PyType:
                 return self
             return PyType.bottom()
         return PyType.bottom()
-
     def is_subtype_of(self, other: PyType) -> bool:
         """Check if self is a subtype of other."""
         if self == other:
@@ -434,7 +389,6 @@ class PyType:
                 return False
             return all(p1.is_subtype_of(p2) for p1, p2 in zip(self.params, other.params))
         return False
-
     def __repr__(self) -> str:
         if self.kind == TypeKind.UNION:
             members = " | ".join(repr(m) for m in sorted(self.union_members, key=str))
@@ -446,8 +400,6 @@ class PyType:
             params = ", ".join(repr(p) for p in self.params)
             return f"{self.name}[{params}]"
         return self.name
-
-
 @dataclass
 class TypeEnvironment:
     """
@@ -457,14 +409,12 @@ class TypeEnvironment:
     - Type narrowing from control flow
     - Scope hierarchies (local, enclosing, global, builtin)
     """
-
     types: dict[str, PyType] = field(default_factory=dict)
     parent: TypeEnvironment | None = None
     globals: dict[str, PyType] = field(default_factory=dict)
     refinements: dict[str, PyType] = field(default_factory=dict)
     definitely_assigned: set[str] = field(default_factory=set)
     maybe_assigned: set[str] = field(default_factory=set)
-
     def get_type(self, name: str) -> PyType:
         """Look up type for a variable."""
         if name in self.refinements:
@@ -479,24 +429,20 @@ class TypeEnvironment:
         if builtin_type:
             return builtin_type
         return PyType.unknown()
-
     def set_type(self, name: str, typ: PyType) -> None:
         """Set type for a variable."""
         self.types[name] = typ
         self.definitely_assigned.add(name)
         self.maybe_assigned.add(name)
-
     def refine_type(self, name: str, typ: PyType) -> None:
         """Refine type based on control flow (isinstance, etc.)."""
         current = self.get_type(name)
         refined = current.meet(typ)
         if refined.kind != TypeKind.BOTTOM:
             self.refinements[name] = refined
-
     def clear_refinement(self, name: str) -> None:
         """Clear type refinement for a variable."""
         self.refinements.pop(name, None)
-
     def copy(self) -> TypeEnvironment:
         """Create a copy of this environment."""
         return TypeEnvironment(
@@ -507,7 +453,6 @@ class TypeEnvironment:
             definitely_assigned=set(self.definitely_assigned),
             maybe_assigned=set(self.maybe_assigned),
         )
-
     def join(self, other: TypeEnvironment) -> TypeEnvironment:
         """Join two environments (for control flow merge points)."""
         result = TypeEnvironment(
@@ -522,11 +467,9 @@ class TypeEnvironment:
         result.definitely_assigned = self.definitely_assigned & other.definitely_assigned
         result.maybe_assigned = self.maybe_assigned | other.maybe_assigned
         return result
-
     def enter_scope(self) -> TypeEnvironment:
         """Create a new child scope."""
         return TypeEnvironment(parent=self, globals=self.globals)
-
     def _get_builtin_type(self, name: str) -> PyType | None:
         """Get type for a builtin name."""
         builtin_types = {
@@ -628,8 +571,6 @@ class TypeEnvironment:
             ),
         }
         return builtin_types.get(name)
-
-
 class TypeInferenceEngine:
     """
     Main type inference engine.
@@ -639,13 +580,11 @@ class TypeInferenceEngine:
     - Pattern-based inference
     - Type annotation integration
     """
-
     def __init__(self) -> None:
         self.environments: dict[int, TypeEnvironment] = {}
         self.function_signatures: dict[str, tuple[list[PyType], PyType]] = {}
         self.class_attributes: dict[str, dict[str, PyType]] = {}
         self._inference_cache: dict[tuple[str, int], PyType] = {}
-
     def infer_from_annotation(self, annotation: Any) -> PyType:
         """Convert a type annotation to PyType."""
         if annotation is None:
@@ -690,7 +629,6 @@ class TypeInferenceEngine:
         if isinstance(annotation, type):
             return PyType.instance(annotation.__name__)
         return PyType.any_()
-
     def _parse_string_annotation(self, annotation: str) -> PyType:
         """Parse a string type annotation."""
         annotation = annotation.strip()
@@ -736,7 +674,6 @@ class TypeInferenceEngine:
             member_types = [self._parse_string_annotation(p) for p in parts]
             return PyType.union_(*member_types)
         return PyType.instance(annotation)
-
     def infer_function_signature(self, func: Callable) -> tuple[list[PyType], PyType]:
         """Infer parameter and return types for a function."""
         func_name = getattr(func, "__qualname__", str(func))
@@ -758,7 +695,6 @@ class TypeInferenceEngine:
         return_type = self.infer_from_annotation(hints.get("return", None))
         self.function_signatures[func_name] = (param_types, return_type)
         return param_types, return_type
-
     def infer_from_value(self, value: Any) -> PyType:
         """Infer type from a concrete Python value."""
         if value is None:
@@ -827,7 +763,6 @@ class TypeInferenceEngine:
             except Exception:
                 return PyType(kind=TypeKind.CALLABLE, name="Callable")
         return PyType.instance(type(value).__name__)
-
     def infer_binary_op_result(
         self,
         op: str,
@@ -870,7 +805,6 @@ class TypeInferenceEngine:
         if op in {"and", "or"}:
             return left.join(right)
         return PyType.any_()
-
     def infer_unary_op_result(self, op: str, operand: PyType) -> PyType:
         """Infer result type of a unary operation."""
         if op == "-":
@@ -885,7 +819,6 @@ class TypeInferenceEngine:
         if op == "not":
             return PyType.bool_()
         return PyType.any_()
-
     def infer_subscript_result(
         self,
         container: PyType,
@@ -909,7 +842,6 @@ class TypeInferenceEngine:
         if container.kind == TypeKind.BYTES:
             return PyType.int_()
         return PyType.any_()
-
     def infer_attribute_result(
         self,
         obj: PyType,
@@ -1044,7 +976,6 @@ class TypeInferenceEngine:
             if attr_name in deque_methods:
                 return deque_methods[attr_name]
         return PyType.any_()
-
     def infer_call_result(
         self,
         callee: PyType,
@@ -1076,7 +1007,6 @@ class TypeInferenceEngine:
                 return PyType.bytes_()
             return PyType.instance(class_name)
         return PyType.any_()
-
     def narrow_type_for_isinstance(
         self,
         var_type: PyType,
@@ -1105,7 +1035,6 @@ class TypeInferenceEngine:
             if var_type.is_subtype_of(check_type):
                 return PyType.bottom()
             return var_type
-
     def narrow_type_for_none_check(
         self,
         var_type: PyType,
@@ -1123,7 +1052,6 @@ class TypeInferenceEngine:
             return PyType.none()
         else:
             return var_type.without_none()
-
     def narrow_type_for_truthiness(
         self,
         var_type: PyType,
@@ -1142,8 +1070,6 @@ class TypeInferenceEngine:
             return narrowed
         else:
             return var_type
-
-
 class PatternRecognizer:
     """
     Recognizes common Python patterns that affect type inference.
@@ -1156,10 +1082,8 @@ class PatternRecognizer:
     - Container membership tests
     - Exception handling
     """
-
     def __init__(self, type_engine: TypeInferenceEngine) -> None:
         self.type_engine = type_engine
-
     def is_dict_get_pattern(
         self,
         callee_type: PyType,
@@ -1182,14 +1106,12 @@ class PatternRecognizer:
             default_type = args[1]
             return val_type.join(default_type)
         return None
-
     def is_defaultdict_pattern(
         self,
         container_type: PyType,
     ) -> bool:
         """Check if this is a defaultdict (no KeyError on missing keys)."""
         return container_type.kind == TypeKind.DEFAULTDICT
-
     def is_safe_dict_access(
         self,
         container_type: PyType,
@@ -1209,7 +1131,6 @@ class PatternRecognizer:
         if access_method in {"get", "setdefault", "pop"}:
             return True
         return False
-
     def is_membership_guard(
         self,
         guard_var: str,
@@ -1221,7 +1142,6 @@ class PatternRecognizer:
         Pattern: if key in dict: dict[key]
         """
         return guard_var == guarded_var
-
     def recognize_iteration_pattern(
         self,
         container_type: PyType,
@@ -1247,7 +1167,6 @@ class PatternRecognizer:
         if container_type.kind == TypeKind.DEQUE:
             return container_type.get_element_type()
         return None
-
     def recognize_dict_items_pattern(
         self,
         container_type: PyType,
@@ -1262,7 +1181,6 @@ class PatternRecognizer:
         if method_name != "items":
             return None
         return (container_type.get_key_type(), container_type.get_value_type())
-
     def is_string_operation_safe(
         self,
         left_type: PyType,
@@ -1281,8 +1199,6 @@ class PatternRecognizer:
                 left_type.kind == TypeKind.INT and right_type.kind == TypeKind.STR
             )
         return False
-
-
 @dataclass
 class TypeState:
     """
@@ -1292,7 +1208,6 @@ class TypeState:
     - Refinements from control flow
     - Definitely/maybe assigned
     """
-
     env: TypeEnvironment
     pc: int = 0
     in_try_block: bool = False
@@ -1302,7 +1217,6 @@ class TypeState:
     in_loop_body: bool = False
     branch_condition: str | None = None
     positive_branch: bool = True
-
     def copy(self) -> TypeState:
         """Create a copy of this state."""
         return TypeState(
@@ -1316,7 +1230,6 @@ class TypeState:
             branch_condition=self.branch_condition,
             positive_branch=self.positive_branch,
         )
-
     def join(self, other: TypeState) -> TypeState:
         """Join two states at a merge point."""
         return TypeState(
@@ -1328,8 +1241,6 @@ class TypeState:
             loop_depth=max(self.loop_depth, other.loop_depth),
             in_loop_body=self.in_loop_body or other.in_loop_body,
         )
-
-
 class TypeStateMachine:
     """
     Tracks type state through control flow.
@@ -1339,7 +1250,6 @@ class TypeStateMachine:
     - Try/except/finally blocks
     - Function calls and returns
     """
-
     def __init__(
         self,
         type_engine: TypeInferenceEngine,
@@ -1350,15 +1260,12 @@ class TypeStateMachine:
         self.states: dict[int, TypeState] = {}
         self.pending: list[TypeState] = []
         self.branch_narrowings: dict[int, dict[str, PyType]] = defaultdict(dict)
-
     def get_state(self, pc: int) -> TypeState | None:
         """Get type state at a program point."""
         return self.states.get(pc)
-
     def set_state(self, pc: int, state: TypeState) -> None:
         """Set type state at a program point."""
         self.states[pc] = state
-
     def enter_branch(
         self,
         state: TypeState,
@@ -1385,7 +1292,6 @@ class TypeStateMachine:
         )
         new_state.env.refine_type(condition_var, narrowed)
         return new_state
-
     def enter_none_branch(
         self,
         state: TypeState,
@@ -1398,7 +1304,6 @@ class TypeStateMachine:
         narrowed = self.type_engine.narrow_type_for_none_check(current_type, is_none)
         new_state.env.refine_type(var_name, narrowed)
         return new_state
-
     def enter_truthiness_branch(
         self,
         state: TypeState,
@@ -1411,7 +1316,6 @@ class TypeStateMachine:
         narrowed = self.type_engine.narrow_type_for_truthiness(current_type, is_truthy)
         new_state.env.refine_type(var_name, narrowed)
         return new_state
-
     def merge_branches(
         self,
         states: list[TypeState],
@@ -1428,21 +1332,18 @@ class TypeStateMachine:
             result = result.join(state)
         result.env.refinements.clear()
         return result
-
     def enter_loop(self, state: TypeState) -> TypeState:
         """Enter a loop body."""
         new_state = state.copy()
         new_state.loop_depth += 1
         new_state.in_loop_body = True
         return new_state
-
     def exit_loop(self, state: TypeState) -> TypeState:
         """Exit a loop body."""
         new_state = state.copy()
         new_state.loop_depth = max(0, new_state.loop_depth - 1)
         new_state.in_loop_body = new_state.loop_depth > 0
         return new_state
-
     def widen_loop_state(
         self,
         before: TypeState,
@@ -1456,13 +1357,11 @@ class TypeStateMachine:
             if before_type != after_type:
                 result.env.types[var] = before_type.join(after_type)
         return result
-
     def enter_try_block(self, state: TypeState) -> TypeState:
         """Enter a try block."""
         new_state = state.copy()
         new_state.in_try_block = True
         return new_state
-
     def enter_except_block(
         self,
         state: TypeState,
@@ -1476,7 +1375,6 @@ class TypeStateMachine:
         if exception_var and exception_type:
             new_state.env.set_type(exception_var, exception_type)
         return new_state
-
     def enter_finally_block(self, state: TypeState) -> TypeState:
         """Enter a finally block."""
         new_state = state.copy()
@@ -1484,7 +1382,6 @@ class TypeStateMachine:
         new_state.in_except_block = False
         new_state.in_finally_block = True
         return new_state
-
     def exit_exception_handling(self, state: TypeState) -> TypeState:
         """Exit exception handling blocks."""
         new_state = state.copy()
@@ -1492,8 +1389,6 @@ class TypeStateMachine:
         new_state.in_except_block = False
         new_state.in_finally_block = False
         return new_state
-
-
 @dataclass
 class ConfidenceScore:
     """
@@ -1504,11 +1399,9 @@ class ConfidenceScore:
     - Corroboration (multiple sources agreeing)
     - Narrowing (type guards increase confidence)
     """
-
     score: float
     source: str
     factors: dict[str, float] = field(default_factory=dict)
-
     @classmethod
     def from_annotation(cls) -> ConfidenceScore:
         """High confidence from explicit annotation."""
@@ -1517,7 +1410,6 @@ class ConfidenceScore:
             source="annotation",
             factors={"explicit": 0.95},
         )
-
     @classmethod
     def from_literal(cls) -> ConfidenceScore:
         """Very high confidence from literal value."""
@@ -1526,7 +1418,6 @@ class ConfidenceScore:
             source="literal",
             factors={"literal": 0.99},
         )
-
     @classmethod
     def from_inference(cls, reliability: float = 0.7) -> ConfidenceScore:
         """Medium confidence from inference."""
@@ -1535,7 +1426,6 @@ class ConfidenceScore:
             source="inferred",
             factors={"inference": reliability},
         )
-
     @classmethod
     def from_isinstance_guard(cls) -> ConfidenceScore:
         """High confidence from isinstance check."""
@@ -1544,7 +1434,6 @@ class ConfidenceScore:
             source="isinstance_guard",
             factors={"type_guard": 0.9},
         )
-
     @classmethod
     def from_none_check(cls) -> ConfidenceScore:
         """High confidence from None check."""
@@ -1553,7 +1442,6 @@ class ConfidenceScore:
             source="none_check",
             factors={"none_guard": 0.9},
         )
-
     @classmethod
     def unknown(cls) -> ConfidenceScore:
         """Low confidence for unknown."""
@@ -1562,7 +1450,6 @@ class ConfidenceScore:
             source="unknown",
             factors={"unknown": 0.3},
         )
-
     def combine(self, other: ConfidenceScore) -> ConfidenceScore:
         """Combine confidence scores."""
         combined_score = min(self.score, other.score)
@@ -1572,7 +1459,6 @@ class ConfidenceScore:
             source=f"{self.source}+{other.source}",
             factors=combined_factors,
         )
-
     def boost_from_guard(self, boost: float = 0.1) -> ConfidenceScore:
         """Boost confidence from a type guard."""
         new_score = min(1.0, self.score + boost)
@@ -1581,8 +1467,6 @@ class ConfidenceScore:
             source=self.source,
             factors={**self.factors, "guard_boost": boost},
         )
-
-
 class TypeAnalyzer:
     """
     Main type analysis integration for PySpectre.
@@ -1592,13 +1476,11 @@ class TypeAnalyzer:
     - Type state tracking
     - Confidence scoring
     """
-
     def __init__(self) -> None:
         self.type_engine = TypeInferenceEngine()
         self.pattern_recognizer = PatternRecognizer(self.type_engine)
         self.state_machine = TypeStateMachine(self.type_engine, self.pattern_recognizer)
         self.confidence_scores: dict[tuple[int, str], ConfidenceScore] = {}
-
     def analyze_function(
         self,
         func: Callable,
@@ -1623,19 +1505,16 @@ class TypeAnalyzer:
         initial_state = TypeState(env=initial_env, pc=0)
         self.state_machine.set_state(0, initial_state)
         return {pc: state.env for pc, state in self.state_machine.states.items()}
-
     def get_type_at(self, pc: int, var_name: str) -> PyType:
         """Get type of a variable at a program point."""
         state = self.state_machine.get_state(pc)
         if state:
             return state.env.get_type(var_name)
         return PyType.unknown()
-
     def get_confidence_at(self, pc: int, var_name: str) -> ConfidenceScore:
         """Get confidence score for a variable at a program point."""
         key = (pc, var_name)
         return self.confidence_scores.get(key, ConfidenceScore.unknown())
-
     def is_safe_subscript(
         self,
         pc: int,
@@ -1664,7 +1543,6 @@ class TypeAnalyzer:
             if index_type.kind != TypeKind.INT and index_type.kind != TypeKind.LITERAL:
                 pass
         return True, "No obvious type issue"
-
     def is_safe_binary_op(
         self,
         pc: int,
@@ -1708,7 +1586,6 @@ class TypeAnalyzer:
                     if val == 0:
                         return False, "Division by zero literal"
         return True, "No obvious type issue"
-
     def check_none_dereference(
         self,
         pc: int,
@@ -1725,11 +1602,7 @@ class TypeAnalyzer:
         if var_type.is_nullable():
             return True, "Variable could be None"
         return False, "Variable is not nullable"
-
-
 _default_type_analyzer: TypeAnalyzer | None = None
-
-
 def get_type_analyzer() -> TypeAnalyzer:
     """Get the default type analyzer instance."""
     global _default_type_analyzer

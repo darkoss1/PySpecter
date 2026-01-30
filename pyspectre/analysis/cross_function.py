@@ -7,9 +7,7 @@ This module provides cross-function analysis capabilities including:
 - Escape analysis
 - Side effect tracking
 """
-
 from __future__ import annotations
-
 import dis
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -17,13 +15,9 @@ from enum import Enum, Flag, auto
 from typing import (
     Any,
 )
-
 from .type_inference import PyType, TypeEnvironment
-
-
 class Effect(Flag):
     """Side effects that a function may have."""
-
     NONE = 0
     READ_LOCAL = auto()
     WRITE_LOCAL = auto()
@@ -46,12 +40,9 @@ class Effect(Flag):
     WRITE_ANY = WRITE_LOCAL | WRITE_GLOBAL | WRITE_HEAP
     IO = READ_FILE | WRITE_FILE | READ_NETWORK | WRITE_NETWORK
     IMPURE = READ_ANY | WRITE_ANY | IO | RAISE
-
-
 @dataclass(frozen=True)
 class EffectSummary:
     """Summary of effects for a function."""
-
     effects: Effect = Effect.NONE
     reads_globals: frozenset[str] = frozenset()
     reads_attributes: frozenset[str] = frozenset()
@@ -59,17 +50,14 @@ class EffectSummary:
     writes_attributes: frozenset[str] = frozenset()
     may_raise: frozenset[str] = frozenset()
     allocates: frozenset[str] = frozenset()
-
     @property
     def is_pure(self) -> bool:
         """Check if function is pure (no side effects)."""
         return self.effects == Effect.NONE
-
     @property
     def is_read_only(self) -> bool:
         """Check if function only reads."""
         return not (self.effects & Effect.WRITE_ANY)
-
     def merge_with(self, other: EffectSummary) -> EffectSummary:
         """Merge two effect summaries."""
         return EffectSummary(
@@ -81,12 +69,9 @@ class EffectSummary:
             may_raise=self.may_raise | other.may_raise,
             allocates=self.allocates | other.allocates,
         )
-
-
 @dataclass
 class CallSiteInfo:
     """Information about a call site."""
-
     caller: str
     callee: str
     line: int
@@ -99,12 +84,9 @@ class CallSiteInfo:
     is_super_call: bool = False
     is_dynamic: bool = False
     possible_callees: set[str] = field(default_factory=set)
-
-
 @dataclass
 class CallGraphNode:
     """Node in the call graph representing a function."""
-
     name: str
     qualified_name: str
     callees: list[CallSiteInfo] = field(default_factory=list)
@@ -113,17 +95,13 @@ class CallGraphNode:
     is_entry_point: bool = False
     type_env: TypeEnvironment | None = None
     effect_summary: EffectSummary | None = None
-
-
 class CallGraph:
     """
     Call graph representing function call relationships.
     """
-
     def __init__(self) -> None:
         self.nodes: dict[str, CallGraphNode] = {}
         self.entry_points: set[str] = set()
-
     def add_function(self, name: str, qualified_name: str = "") -> CallGraphNode:
         """Add a function to the call graph."""
         if name not in self.nodes:
@@ -132,7 +110,6 @@ class CallGraph:
                 qualified_name=qualified_name or name,
             )
         return self.nodes[name]
-
     def add_call(
         self,
         caller: str,
@@ -153,19 +130,16 @@ class CallGraph:
         )
         caller_node.callees.append(call_site)
         callee_node.callers.add(caller)
-
     def get_callees(self, func: str) -> list[str]:
         """Get all functions called by a function."""
         if func not in self.nodes:
             return []
         return [cs.callee for cs in self.nodes[func].callees]
-
     def get_callers(self, func: str) -> set[str]:
         """Get all functions that call a function."""
         if func not in self.nodes:
             return set()
         return self.nodes[func].callers
-
     def find_recursive(self) -> set[str]:
         """Find all recursive functions."""
         recursive: set[str] = set()
@@ -174,7 +148,6 @@ class CallGraph:
                 recursive.add(name)
                 self.nodes[name].is_recursive = True
         return recursive
-
     def _is_recursive(self, func: str, visited: set[str]) -> bool:
         """Check if a function is (mutually) recursive."""
         if func in visited:
@@ -184,7 +157,6 @@ class CallGraph:
             if callee in visited or self._is_recursive(callee, visited):
                 return True
         return False
-
     def topological_order(self) -> list[str]:
         """Get functions in topological order (callees before callers)."""
         in_degree: dict[str, int] = defaultdict(int)
@@ -204,7 +176,6 @@ class CallGraph:
             if name not in result:
                 result.append(name)
         return result
-
     def get_reachable(self, from_func: str) -> set[str]:
         """Get all functions reachable from a starting function."""
         reachable: set[str] = set()
@@ -216,16 +187,12 @@ class CallGraph:
             reachable.add(func)
             worklist.extend(self.get_callees(func))
         return reachable
-
-
 class CallGraphBuilder:
     """
     Builds a call graph from bytecode.
     """
-
     def __init__(self) -> None:
         self.call_graph = CallGraph()
-
     def build_from_module(self, module_code: Any) -> CallGraph:
         """Build call graph from a module's code object."""
         self.call_graph = CallGraph()
@@ -236,7 +203,6 @@ class CallGraphBuilder:
             self.call_graph.entry_points.add("<module>")
         self.call_graph.find_recursive()
         return self.call_graph
-
     def _find_functions(self, code: Any, prefix: str = "") -> None:
         """Find all functions in a code object."""
         for const in code.co_consts:
@@ -246,7 +212,6 @@ class CallGraphBuilder:
                 self.call_graph.add_function(func_name, qualified_name)
                 self._process_code(const, func_name)
                 self._find_functions(const, qualified_name)
-
     def _process_code(self, code: Any, func_name: str) -> None:
         """Process a code object for call sites."""
         instructions = list(dis.get_instructions(code))
@@ -334,13 +299,10 @@ class CallGraphBuilder:
                 if stack_items:
                     stack_items.pop()
                 stack_items.append("expr")
-
-
 class EffectAnalyzer:
     """
     Analyzes functions for side effects.
     """
-
     PURE_FUNCTIONS: set[str] = {
         "len",
         "str",
@@ -394,10 +356,8 @@ class EffectAnalyzer:
         "readlines",
         "writelines",
     }
-
     def __init__(self) -> None:
         self.cache: dict[str, EffectSummary] = {}
-
     def analyze_function(self, code: Any, name: str = "") -> EffectSummary:
         """Analyze a function for effects."""
         if name in self.cache:
@@ -455,7 +415,6 @@ class EffectAnalyzer:
         )
         self.cache[name] = summary
         return summary
-
     def analyze_with_call_graph(
         self,
         call_graph: CallGraph,
@@ -478,7 +437,6 @@ class EffectAnalyzer:
                         local_effects = local_effects.merge_with(summaries[callee])
             summaries[func_name] = local_effects
         return summaries
-
     def _get_builtin_effects(self, func_name: str) -> EffectSummary:
         """Get effects for built-in/external functions."""
         base_name = func_name.split(".")[-1]
@@ -487,30 +445,21 @@ class EffectAnalyzer:
         if base_name in self.IO_FUNCTIONS:
             return EffectSummary(effects=Effect.IO | Effect.RAISE)
         return EffectSummary(effects=Effect.IMPURE)
-
-
 class EscapeState(Enum):
     """Escape state of an allocated object."""
-
     NO_ESCAPE = auto()
     ARG_ESCAPE = auto()
     RETURN_ESCAPE = auto()
     GLOBAL_ESCAPE = auto()
-
-
 @dataclass
 class EscapeInfo:
     """Information about object escape."""
-
     state: EscapeState
     escape_sites: list[tuple[int, str]] = field(default_factory=list)
-
-
 class EscapeAnalyzer:
     """
     Analyzes object escape to determine allocation optimizations.
     """
-
     def analyze_function(self, code: Any) -> dict[int, EscapeInfo]:
         """Analyze object escape in a function."""
         allocations: dict[int, EscapeInfo] = {}
@@ -591,52 +540,40 @@ class EscapeAnalyzer:
                 if stack:
                     stack.append(stack[-1])
         return allocations
-
-
 @dataclass(frozen=True)
 class CallContext:
     """
     Context for context-sensitive analysis.
     Uses call-string approach: track the last k call sites.
     """
-
     call_string: tuple[tuple[str, int], ...] = ()
-
     def extend(self, caller: str, pc: int, k: int = 2) -> CallContext:
         """Extend context with a new call site."""
         new_string = self.call_string + ((caller, pc),)
         if len(new_string) > k:
             new_string = new_string[-k:]
         return CallContext(new_string)
-
     def __str__(self) -> str:
         if not self.call_string:
             return "<entry>"
         return " -> ".join(f"{caller}@{pc}" for caller, pc in self.call_string)
-
-
 @dataclass
 class ContextSensitiveSummary:
     """Summary for a function under a specific context."""
-
     context: CallContext
     function: str
     type_env: TypeEnvironment | None = None
     effect_summary: EffectSummary | None = None
     param_types: dict[str, PyType] = field(default_factory=dict)
     return_type: PyType | None = None
-
-
 class ContextSensitiveAnalyzer:
     """
     Context-sensitive interprocedural analysis.
     """
-
     def __init__(self, k: int = 2) -> None:
         self.k = k
         self.summaries: dict[tuple[str, CallContext], ContextSensitiveSummary] = {}
         self.call_graph: CallGraph | None = None
-
     def analyze(
         self,
         call_graph: CallGraph,
@@ -654,7 +591,6 @@ class ContextSensitiveAnalyzer:
                     code_objects,
                 )
         return self.summaries
-
     def _analyze_function(
         self,
         func_name: str,
@@ -691,19 +627,15 @@ class ContextSensitiveAnalyzer:
                                 callee_summary.effect_summary
                             )
         return summary
-
-
 class CrossFunctionAnalyzer:
     """
     High-level interface for cross-function analysis.
     """
-
     def __init__(self) -> None:
         self.call_graph_builder = CallGraphBuilder()
         self.effect_analyzer = EffectAnalyzer()
         self.escape_analyzer = EscapeAnalyzer()
         self.context_analyzer = ContextSensitiveAnalyzer()
-
     def analyze_module(self, module_code: Any) -> dict[str, Any]:
         """Analyze a module and return cross-function results."""
         results: dict[str, Any] = {}
@@ -720,7 +652,6 @@ class CrossFunctionAnalyzer:
         cs_summaries = self.context_analyzer.analyze(call_graph, code_objects)
         results["context_sensitive"] = cs_summaries
         return results
-
     def _collect_code_objects(
         self,
         code: Any,

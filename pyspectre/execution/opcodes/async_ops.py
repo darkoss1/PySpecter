@@ -7,20 +7,14 @@ Adds support for:
 - ASYNC_GEN_WRAP
 - Coroutine management opcodes
 """
-
 from __future__ import annotations
-
 import dis
 from typing import TYPE_CHECKING
-
 from pyspectre.core.types import SymbolicNone, SymbolicValue
 from pyspectre.execution.dispatcher import OpcodeResult, opcode_handler
-
 if TYPE_CHECKING:
     from pyspectre.core.state import VMState
     from pyspectre.execution.dispatcher import OpcodeDispatcher
-
-
 @opcode_handler("GET_AWAITABLE")
 def handle_get_awaitable(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -39,8 +33,6 @@ def handle_get_awaitable(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("SEND")
 def handle_send(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """
@@ -62,8 +54,6 @@ def handle_send(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("YIELD_VALUE")
 def handle_yield_value(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -79,8 +69,6 @@ def handle_yield_value(
     state.push(SymbolicNone())
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("RESUME")
 def handle_resume(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """
@@ -90,8 +78,6 @@ def handle_resume(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher)
     """
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("GET_AITER")
 def handle_get_aiter(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """
@@ -107,8 +93,6 @@ def handle_get_aiter(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatch
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("GET_ANEXT")
 def handle_get_anext(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """
@@ -122,8 +106,6 @@ def handle_get_anext(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatch
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("END_ASYNC_FOR")
 def handle_end_async_for(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -139,8 +121,6 @@ def handle_end_async_for(
         state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("ASYNC_GEN_WRAP")
 def handle_async_gen_wrap(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -158,8 +138,6 @@ def handle_async_gen_wrap(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("RETURN_GENERATOR")
 def handle_return_generator(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -173,8 +151,6 @@ def handle_return_generator(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("GEN_START")
 def handle_gen_start(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """
@@ -185,8 +161,6 @@ def handle_gen_start(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatch
         state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BEFORE_ASYNC_WITH")
 def handle_before_async_with(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -206,8 +180,6 @@ def handle_before_async_with(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("CLEANUP_THROW")
 def handle_cleanup_throw(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -220,8 +192,6 @@ def handle_cleanup_throw(
             state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("EXTENDED_ARG_QUICK")
 def handle_extended_arg_quick(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -232,8 +202,6 @@ def handle_extended_arg_quick(
     """
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("CALL_INTRINSIC_1")
 def handle_call_intrinsic_1(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -251,8 +219,6 @@ def handle_call_intrinsic_1(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("CALL_INTRINSIC_2")
 def handle_call_intrinsic_2(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher

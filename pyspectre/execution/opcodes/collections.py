@@ -1,22 +1,15 @@
 """Collection opcodes (lists, tuples, dicts, sets)."""
-
 from __future__ import annotations
-
 import dis
 from typing import TYPE_CHECKING
-
 import z3
-
 from pyspectre.analysis.detectors import Issue, IssueKind
 from pyspectre.core.solver import get_model, is_satisfiable
 from pyspectre.core.types import SymbolicDict, SymbolicList, SymbolicString, SymbolicValue
 from pyspectre.execution.dispatcher import OpcodeResult, opcode_handler
-
 if TYPE_CHECKING:
     from pyspectre.core.state import VMState
     from pyspectre.execution.dispatcher import OpcodeDispatcher
-
-
 @opcode_handler("BUILD_LIST")
 def handle_build_list(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -33,8 +26,6 @@ def handle_build_list(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BUILD_TUPLE")
 def handle_build_tuple(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -51,8 +42,6 @@ def handle_build_tuple(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BUILD_SET")
 def handle_build_set(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Build a set from stack items."""
@@ -65,22 +54,30 @@ def handle_build_set(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatch
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BUILD_MAP")
 def handle_build_map(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Build a dict from stack items."""
     count = int(instr.argval) if instr.argval else 0
-    for _ in range(count * 2):
-        if state.stack:
-            state.pop()
+    items = []
+    for _ in range(count):
+        if state.stack and len(state.stack) >= 2:
+            val = state.pop()
+            key = state.pop()
+            items.append((key, val))
+    items.reverse()
     sym_dict, constraint = SymbolicDict.symbolic(f"dict_{state.pc}")
+    for key, val in items:
+        if isinstance(key, SymbolicString):
+            s_val = val if isinstance(val, SymbolicValue) else SymbolicValue.from_const(val)
+            new_array = z3.Store(sym_dict.z3_array, key.z3_str, s_val.z3_int)
+            setattr(sym_dict, "z3_array", new_array)
+            new_keys = z3.Concat(sym_dict.known_keys, z3.Unit(key.z3_str))
+            setattr(sym_dict, "known_keys", new_keys)
+    setattr(sym_dict, "z3_len", z3.IntVal(count))
     state.push(sym_dict)
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BUILD_CONST_KEY_MAP")
 def handle_build_const_key_map(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -97,8 +94,6 @@ def handle_build_const_key_map(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BUILD_STRING")
 def handle_build_string(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -113,8 +108,6 @@ def handle_build_string(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BUILD_SLICE")
 def handle_build_slice(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -129,8 +122,6 @@ def handle_build_slice(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LIST_EXTEND", "SET_UPDATE", "DICT_UPDATE", "DICT_MERGE")
 def handle_collection_extend(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -140,8 +131,6 @@ def handle_collection_extend(
         state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("LIST_APPEND")
 def handle_list_append(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -151,8 +140,6 @@ def handle_list_append(
         state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("SET_ADD")
 def handle_set_add(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Add to a set (used in set comprehensions)."""
@@ -160,8 +147,6 @@ def handle_set_add(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
         state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("MAP_ADD")
 def handle_map_add(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Add to a dict (used in dict comprehensions)."""
@@ -171,8 +156,6 @@ def handle_map_add(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
         state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BINARY_SUBSCR")
 def handle_binary_subscr(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -186,7 +169,7 @@ def handle_binary_subscr(
             *state.path_constraints,
             index.is_int,
             z3.Or(
-                index.z3_int < 0,
+                index.z3_int < -container.z3_len,
                 index.z3_int >= container.z3_len,
             ),
         ]
@@ -200,14 +183,16 @@ def handle_binary_subscr(
                     pc=state.pc,
                 )
             )
-        state.add_constraint(z3.And(index.z3_int >= 0, index.z3_int < container.z3_len))
+        state.add_constraint(
+            z3.And(index.z3_int >= -container.z3_len, index.z3_int < container.z3_len)
+        )
         result = container[index]
     elif isinstance(container, SymbolicString) and isinstance(index, SymbolicValue):
         oob_check = [
             *state.path_constraints,
             index.is_int,
             z3.Or(
-                index.z3_int < 0,
+                index.z3_int < -container.z3_len,
                 index.z3_int >= container.z3_len,
             ),
         ]
@@ -221,7 +206,9 @@ def handle_binary_subscr(
                     pc=state.pc,
                 )
             )
-        state.add_constraint(z3.And(index.z3_int >= 0, index.z3_int < container.z3_len))
+        state.add_constraint(
+            z3.And(index.z3_int >= -container.z3_len, index.z3_int < container.z3_len)
+        )
         result = container[index]
     elif isinstance(container, SymbolicDict) and isinstance(index, SymbolicString):
         result = container[index]
@@ -233,8 +220,6 @@ def handle_binary_subscr(
     if issues:
         return OpcodeResult(new_states=[state], issues=issues)
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_SUBSCR")
 def handle_store_subscr(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -245,8 +230,6 @@ def handle_store_subscr(
     value = state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("DELETE_SUBSCR")
 def handle_delete_subscr(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -256,8 +239,6 @@ def handle_delete_subscr(
     container = state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("BINARY_SLICE")
 def handle_binary_slice(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -283,8 +264,6 @@ def handle_binary_slice(
         state.push(result)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("STORE_SLICE")
 def handle_store_slice(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -296,8 +275,6 @@ def handle_store_slice(
     value = state.pop()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("UNPACK_SEQUENCE")
 def handle_unpack_sequence(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -312,8 +289,6 @@ def handle_unpack_sequence(
         state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("UNPACK_EX")
 def handle_unpack_ex(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Unpack with starred target."""
@@ -328,8 +303,6 @@ def handle_unpack_ex(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatch
         state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("FORMAT_VALUE")
 def handle_format_value(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -346,8 +319,6 @@ def handle_format_value(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("CONVERT_VALUE")
 def handle_convert_value(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -360,8 +331,6 @@ def handle_convert_value(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("FORMAT_SIMPLE")
 def handle_format_simple(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -374,8 +343,6 @@ def handle_format_simple(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("FORMAT_WITH_SPEC")
 def handle_format_with_spec(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher

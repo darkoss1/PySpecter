@@ -3,38 +3,24 @@ This module defines the execution state of the symbolic virtual machine,
 including the operand stack, local/global variables, path constraints,
 and state forking for branch exploration.
 """
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
-
 import z3
-
-if TYPE_CHECKING:
-    pass
-
-
 @dataclass
 class BlockInfo:
     """Information about a control flow block (loop, try/except, etc.)."""
-
     block_type: str
     start_pc: int
     end_pc: int
     handler_pc: int | None = None
-
-
 @dataclass
 class CallFrame:
     """Represents a function call frame for inter-procedural analysis."""
-
     function_name: str
     return_pc: int
     local_vars: dict[str, Any]
     stack_depth: int
-
-
 @dataclass
 class VMState:
     """Virtual Machine execution state for symbolic execution.
@@ -52,8 +38,8 @@ class VMState:
         memory: Heap memory model for objects.
         path_id: Unique identifier for this execution path.
         depth: Execution depth for loop/recursion limiting.
+        taint_tracker: Optional taint tracker for security analysis.
     """
-
     stack: list[Any] = field(default_factory=list)
     local_vars: dict[str, Any] = field(default_factory=dict)
     global_vars: dict[str, Any] = field(default_factory=dict)
@@ -66,7 +52,7 @@ class VMState:
     path_id: int = 0
     depth: int = 0
     _path_counter: int = field(default=0, repr=False)
-
+    taint_tracker: Any | None = None
     def fork(self) -> VMState:
         """Create a deep copy of this state for branching.
         Returns:
@@ -83,51 +69,42 @@ class VMState:
             block_stack=list(self.block_stack),
             call_stack=list(self.call_stack),
             visited_pcs=set(self.visited_pcs),
-            memory=dict(self.memory),
+            memory={addr: dict(attrs) for addr, attrs in self.memory.items()},
             path_id=VMState._path_counter,
             depth=self.depth,
+            taint_tracker=self.taint_tracker,
         )
-
     def add_constraint(self, constraint: z3.BoolRef) -> None:
         """Add a path constraint."""
         self.path_constraints.append(constraint)
-
     def push(self, value: Any) -> None:
         """Push a value onto the operand stack."""
         self.stack.append(value)
-
     def pop(self) -> Any:
         """Pop a value from the operand stack."""
         if not self.stack:
             raise RuntimeError("Stack underflow")
         return self.stack.pop()
-
     def peek(self, n: int = 0) -> Any:
         """Peek at the n-th value from the top of the stack."""
         if len(self.stack) <= n:
             raise RuntimeError(f"Stack underflow: cannot peek at position {n}")
         return self.stack[-(n + 1)]
-
     def get_local(self, name: str) -> Any | None:
         """Get a local variable, or None if not found."""
         return self.local_vars.get(name)
-
     def set_local(self, name: str, value: Any) -> None:
         """Set a local variable."""
         self.local_vars[name] = value
-
     def get_global(self, name: str) -> Any | None:
         """Get a global variable, or None if not found."""
         return self.global_vars.get(name)
-
     def set_global(self, name: str, value: Any) -> None:
         """Set a global variable."""
         self.global_vars[name] = value
-
     def constraint_hash(self) -> int:
         """Compute a hash of the current path constraints for loop detection."""
         return hash(tuple(str(c) for c in self.path_constraints))
-
     def mark_visited(self) -> bool:
         """Mark the current PC as visited.
         Returns:
@@ -137,47 +114,37 @@ class VMState:
             return True
         self.visited_pcs.add(self.pc)
         return False
-
     def enter_block(self, block: BlockInfo) -> None:
         """Enter a control flow block."""
         self.block_stack.append(block)
-
     def exit_block(self) -> BlockInfo | None:
         """Exit the current control flow block."""
         if self.block_stack:
             return self.block_stack.pop()
         return None
-
     def current_block(self) -> BlockInfo | None:
         """Get the current control flow block."""
         return self.block_stack[-1] if self.block_stack else None
-
     def push_call(self, frame: CallFrame) -> None:
         """Push a call frame for function entry."""
         self.call_stack.append(frame)
-
     def pop_call(self) -> CallFrame | None:
         """Pop a call frame for function return."""
         if self.call_stack:
             return self.call_stack.pop()
         return None
-
     def call_depth(self) -> int:
         """Get the current call stack depth."""
         return len(self.call_stack)
-
     def copy_constraints(self) -> list[z3.BoolRef]:
         """Get a copy of the current path constraints."""
         return list(self.path_constraints)
-
     def __repr__(self) -> str:
         return (
             f"VMState(path={self.path_id}, pc={self.pc}, "
             f"stack_depth={len(self.stack)}, "
             f"constraints={len(self.path_constraints)})"
         )
-
-
 def create_initial_state(
     local_vars: dict[str, Any] | None = None,
     global_vars: dict[str, Any] | None = None,

@@ -1,22 +1,20 @@
 """Control flow opcodes (jumps, branches, returns)."""
-
 from __future__ import annotations
-
 import dis
 from typing import TYPE_CHECKING
-
 import z3
-
 from pyspectre.analysis.detectors import Issue, IssueKind
 from pyspectre.core.solver import get_model, is_satisfiable
 from pyspectre.core.types import SymbolicNone, SymbolicValue
 from pyspectre.execution.dispatcher import OpcodeResult, opcode_handler
-
 if TYPE_CHECKING:
     from pyspectre.core.state import VMState
     from pyspectre.execution.dispatcher import OpcodeDispatcher
-
-
+@opcode_handler("RESUME", "NOP")
+def handle_no_op(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
+    """Handle no-op instructions."""
+    state.pc += 1
+    return OpcodeResult.continue_with(state)
 def get_truthy_expr(value) -> z3.BoolRef:
     """Get Z3 expression for when a value is truthy."""
     if hasattr(value, "could_be_truthy"):
@@ -27,24 +25,18 @@ def get_truthy_expr(value) -> z3.BoolRef:
             z3.And(value.is_int, value.z3_int != 0),
         )
     return z3.BoolVal(True)
-
-
 @opcode_handler("RETURN_VALUE")
 def handle_return_value(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
 ) -> OpcodeResult:
     """Return from function."""
     return OpcodeResult.terminate()
-
-
 @opcode_handler("RETURN_CONST")
 def handle_return_const(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
 ) -> OpcodeResult:
     """Return a constant (Python 3.13+)."""
     return OpcodeResult.terminate()
-
-
 @opcode_handler("POP_JUMP_IF_FALSE", "POP_JUMP_FORWARD_IF_FALSE", "POP_JUMP_BACKWARD_IF_FALSE")
 def handle_pop_jump_if_false(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -62,8 +54,6 @@ def handle_pop_jump_if_false(
     false_state.add_constraint(z3.Not(cond_expr))
     false_state.pc = target_index
     return OpcodeResult.branch([false_state, true_state])
-
-
 @opcode_handler("POP_JUMP_IF_TRUE", "POP_JUMP_FORWARD_IF_TRUE", "POP_JUMP_BACKWARD_IF_TRUE")
 def handle_pop_jump_if_true(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -81,8 +71,6 @@ def handle_pop_jump_if_true(
     false_state.add_constraint(z3.Not(cond_expr))
     false_state.pc = state.pc + 1
     return OpcodeResult.branch([true_state, false_state])
-
-
 @opcode_handler("POP_JUMP_IF_NONE", "POP_JUMP_FORWARD_IF_NONE", "POP_JUMP_BACKWARD_IF_NONE")
 def handle_pop_jump_if_none(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -108,8 +96,6 @@ def handle_pop_jump_if_none(
     else:
         state.pc += 1
         return OpcodeResult.continue_with(state)
-
-
 @opcode_handler(
     "POP_JUMP_IF_NOT_NONE", "POP_JUMP_FORWARD_IF_NOT_NONE", "POP_JUMP_BACKWARD_IF_NOT_NONE"
 )
@@ -137,8 +123,6 @@ def handle_pop_jump_if_not_none(
     else:
         state.pc = target_index
         return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("JUMP_FORWARD", "JUMP_ABSOLUTE", "JUMP_BACKWARD", "JUMP_BACKWARD_NO_INTERRUPT")
 def handle_jump(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Unconditional jump."""
@@ -147,8 +131,6 @@ def handle_jump(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -
         target_index = state.pc + 1
     state.pc = target_index
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("JUMP_IF_TRUE_OR_POP", "JUMP_IF_FALSE_OR_POP")
 def handle_jump_or_pop(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -168,8 +150,6 @@ def handle_jump_or_pop(
     pop_state.pop()
     pop_state.pc = state.pc + 1
     return OpcodeResult.branch([jump_state, pop_state])
-
-
 @opcode_handler("RAISE_VARARGS")
 def handle_raise_varargs(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -191,8 +171,6 @@ def handle_raise_varargs(
         )
         return OpcodeResult.error(issue)
     return OpcodeResult.terminate()
-
-
 @opcode_handler("LOAD_ASSERTION_ERROR")
 def handle_load_assertion_error(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -208,8 +186,6 @@ def handle_load_assertion_error(
     state.push(marker)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("FOR_ITER")
 def handle_for_iter(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Iterate over a sequence."""
@@ -226,22 +202,16 @@ def handle_for_iter(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatche
         exit_state.pop()
     exit_state.pc = target_index
     return OpcodeResult.branch([continue_state, exit_state])
-
-
 @opcode_handler("GET_ITER")
 def handle_get_iter(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Get iterator from iterable."""
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("END_FOR")
 def handle_end_for(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """End of for loop."""
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("SETUP_FINALLY", "SETUP_WITH", "SETUP_ASYNC_WITH")
 def handle_setup_block(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -249,16 +219,12 @@ def handle_setup_block(
     """Set up try/with block (older Python versions)."""
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("POP_BLOCK")
 def handle_pop_block(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Pop a block from the block stack."""
     state.exit_block()
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("POP_EXCEPT")
 def handle_pop_except(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -266,14 +232,10 @@ def handle_pop_except(
     """Pop exception handler."""
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("RERAISE")
 def handle_reraise(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Re-raise the current exception."""
     return OpcodeResult.terminate()
-
-
 @opcode_handler("PUSH_EXC_INFO")
 def handle_push_exc_info(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -284,8 +246,6 @@ def handle_push_exc_info(
     state.push(SymbolicNone())
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("CHECK_EXC_MATCH")
 def handle_check_exc_match(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -302,8 +262,6 @@ def handle_check_exc_match(
     state.push(result)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("TO_BOOL")
 def handle_to_bool(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Convert top of stack to bool (Python 3.12+)."""
@@ -320,8 +278,6 @@ def handle_to_bool(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
         state.push(result)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("GET_LEN")
 def handle_get_len(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Get length of top of stack (for pattern matching/sequences)."""
@@ -342,8 +298,6 @@ def handle_get_len(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
         state.add_constraint(length >= 0)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("ENTER_EXECUTOR")
 def handle_enter_executor(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -351,8 +305,6 @@ def handle_enter_executor(
     """Enter executor (Python 3.13 JIT hint, ignore)."""
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("JUMP", "JUMP_NO_INTERRUPT")
 def handle_jump(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -> OpcodeResult:
     """Unconditional jump (internal opcodes)."""
@@ -362,8 +314,6 @@ def handle_jump(instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher) -
     else:
         state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("CALL_INTRINSIC_1")
 def handle_call_intrinsic_1(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -384,8 +334,6 @@ def handle_call_intrinsic_1(
         state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("CALL_INTRINSIC_2")
 def handle_call_intrinsic_2(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -400,8 +348,6 @@ def handle_call_intrinsic_2(
     state.add_constraint(constraint)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("MATCH_MAPPING")
 def handle_match_mapping(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -418,8 +364,6 @@ def handle_match_mapping(
     state.push(result)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("MATCH_SEQUENCE")
 def handle_match_sequence(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -436,8 +380,6 @@ def handle_match_sequence(
     state.push(result)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("MATCH_KEYS")
 def handle_match_keys(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher
@@ -459,8 +401,6 @@ def handle_match_keys(
     state.push(success_result)
     state.pc += 1
     return OpcodeResult.continue_with(state)
-
-
 @opcode_handler("MATCH_CLASS")
 def handle_match_class(
     instr: dis.Instruction, state: VMState, ctx: OpcodeDispatcher

@@ -2,28 +2,19 @@
 This module provides sophisticated detectors for complex vulnerability patterns
 including security issues, resource leaks, and concurrency bugs.
 """
-
 from __future__ import annotations
-
 import dis
 from typing import TYPE_CHECKING
-
 import z3
-
 from pyspectre.analysis.detectors import Detector, Issue, IssueKind
-
 if TYPE_CHECKING:
     from pyspectre.core.state import VMState
     from pyspectre.core.types import SymbolicValue
-
-
 class NullDereferenceDetector(Detector):
     """Detects potential null/None dereference issues."""
-
     name = "null-dereference"
     description = "Detects potential None dereference"
     issue_kind = IssueKind.NULL_DEREFERENCE
-
     def check(
         self,
         state: VMState,
@@ -37,7 +28,6 @@ class NullDereferenceDetector(Detector):
             return None
         top = state.peek()
         from pyspectre.core.types import SymbolicNone, SymbolicValue
-
         if isinstance(top, SymbolicNone):
             return Issue(
                 kind=IssueKind.NULL_DEREFERENCE,
@@ -52,7 +42,6 @@ class NullDereferenceDetector(Detector):
             ]
             if is_satisfiable_fn(none_check):
                 from pyspectre.core.solver import get_model
-
                 return Issue(
                     kind=IssueKind.NULL_DEREFERENCE,
                     message=f"Possible None dereference at {instruction.opname}",
@@ -61,19 +50,14 @@ class NullDereferenceDetector(Detector):
                     pc=state.pc,
                 )
         return None
-
-
 class InfiniteLoopDetector(Detector):
     """Detects potential infinite loops."""
-
     name = "infinite-loop"
     description = "Detects potential infinite loops"
     issue_kind = IssueKind.INFINITE_LOOP
-
     def __init__(self):
         self._loop_counters: dict[int, int] = {}
         self._max_iterations = 1000
-
     def check(
         self,
         state: VMState,
@@ -109,18 +93,13 @@ class InfiniteLoopDetector(Detector):
                             pc=state.pc,
                         )
         return None
-
-
 class ResourceLeakDetector(Detector):
     """Detects potential resource leaks (unclosed files, connections, etc.)."""
-
     name = "resource-leak"
     description = "Detects potential resource leaks"
     issue_kind = IssueKind.UNHANDLED_EXCEPTION
-
     def __init__(self):
         self._open_resources: set[int] = set()
-
     def check(
         self,
         state: VMState,
@@ -138,18 +117,13 @@ class ResourceLeakDetector(Detector):
                     pc=state.pc,
                 )
         return None
-
-
 class UseAfterFreeDetector(Detector):
     """Detects use-after-free style bugs (using closed/freed resources)."""
-
     name = "use-after-free"
     description = "Detects use of released resources"
     issue_kind = IssueKind.ATTRIBUTE_ERROR
-
     def __init__(self):
         self._freed_resources: set[int] = set()
-
     def check(
         self,
         state: VMState,
@@ -167,8 +141,6 @@ class UseAfterFreeDetector(Detector):
                         pc=state.pc,
                     )
         return None
-
-
 class IntegerOverflowDetector(Detector):
     """Detects potential integer overflow issues.
     While Python integers don't overflow, this is useful for:
@@ -176,7 +148,6 @@ class IntegerOverflowDetector(Detector):
     - Interfacing with C extensions
     - Array index bounds
     """
-
     name = "overflow"
     description = "Detects potential integer overflow"
     issue_kind = IssueKind.OVERFLOW
@@ -184,12 +155,10 @@ class IntegerOverflowDetector(Detector):
     INT32_MAX = 2**31 - 1
     INT64_MIN = -(2**63)
     INT64_MAX = 2**63 - 1
-
     def __init__(self, bits: int = 64):
         self.bits = bits
         self.min_val = -(2 ** (bits - 1))
         self.max_val = 2 ** (bits - 1) - 1
-
     def check(
         self,
         state: VMState,
@@ -204,7 +173,6 @@ class IntegerOverflowDetector(Detector):
         right = state.peek(0)
         left = state.peek(1)
         from pyspectre.core.types import SymbolicValue
-
         if isinstance(left, SymbolicValue) and isinstance(right, SymbolicValue):
             if instruction.opname == "BINARY_ADD":
                 result_expr = left.z3_int + right.z3_int
@@ -223,7 +191,6 @@ class IntegerOverflowDetector(Detector):
             ]
             if is_satisfiable_fn(overflow_check):
                 from pyspectre.core.solver import get_model
-
                 return Issue(
                     kind=IssueKind.OVERFLOW,
                     message=f"Potential {self.bits}-bit integer overflow",
@@ -232,15 +199,11 @@ class IntegerOverflowDetector(Detector):
                     pc=state.pc,
                 )
         return None
-
-
 class FormatStringDetector(Detector):
     """Detects format string vulnerabilities."""
-
     name = "format-string"
     description = "Detects format string vulnerabilities"
     issue_kind = IssueKind.INVALID_ARGUMENT
-
     def check(
         self,
         state: VMState,
@@ -251,11 +214,8 @@ class FormatStringDetector(Detector):
         if instruction.opname in ("FORMAT_VALUE", "FORMAT_SIMPLE", "BUILD_STRING"):
             pass
         return None
-
-
 class CommandInjectionDetector(Detector):
     """Detects potential command injection vulnerabilities."""
-
     name = "command-injection"
     description = "Detects potential command injection"
     issue_kind = IssueKind.INVALID_ARGUMENT
@@ -268,7 +228,6 @@ class CommandInjectionDetector(Detector):
         "eval",
         "exec",
     }
-
     def check(
         self,
         state: VMState,
@@ -279,15 +238,11 @@ class CommandInjectionDetector(Detector):
         if instruction.opname != "CALL":
             return None
         return None
-
-
 class PathTraversalDetector(Detector):
     """Detects potential path traversal vulnerabilities."""
-
     name = "path-traversal"
     description = "Detects potential path traversal"
     issue_kind = IssueKind.INVALID_ARGUMENT
-
     def check(
         self,
         state: VMState,
@@ -296,16 +251,12 @@ class PathTraversalDetector(Detector):
     ) -> Issue | None:
         """Check for path traversal patterns."""
         return None
-
-
 class SQLInjectionDetector(Detector):
     """Detects potential SQL injection vulnerabilities."""
-
     name = "sql-injection"
     description = "Detects potential SQL injection"
     issue_kind = IssueKind.INVALID_ARGUMENT
     SQL_METHODS = {"execute", "executemany", "executescript"}
-
     def check(
         self,
         state: VMState,
@@ -314,15 +265,11 @@ class SQLInjectionDetector(Detector):
     ) -> Issue | None:
         """Check for SQL injection patterns."""
         return None
-
-
 class UnreachableCodeDetector(Detector):
     """Detects unreachable code paths."""
-
     name = "unreachable-code"
     description = "Detects unreachable code"
     issue_kind = IssueKind.UNREACHABLE_CODE
-
     def check(
         self,
         state: VMState,
@@ -338,16 +285,12 @@ class UnreachableCodeDetector(Detector):
                     pc=state.pc,
                 )
         return None
-
-
 def register_advanced_detectors(registry):
     """Register all advanced detectors with a registry."""
     registry.register(NullDereferenceDetector)
     registry.register(InfiniteLoopDetector)
     registry.register(IntegerOverflowDetector)
     registry.register(UnreachableCodeDetector)
-
-
 __all__ = [
     "NullDereferenceDetector",
     "InfiniteLoopDetector",

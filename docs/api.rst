@@ -1,23 +1,23 @@
 API Reference
 =============
 
-This section documents the public API of Shadow VM.
+This section documents the public API of PySpectre.
 
 
 Main Functions
 --------------
 
-.. autofunction:: shadow_vm.analyze
+.. autofunction:: pyspectre.analyze
 
-.. autofunction:: shadow_vm.analyze_file
+.. autofunction:: pyspectre.analyze_file
 
-.. autofunction:: shadow_vm.quick_check
+.. autofunction:: pyspectre.quick_check
 
-.. autofunction:: shadow_vm.check_division_by_zero
+.. autofunction:: pyspectre.check_division_by_zero
 
-.. autofunction:: shadow_vm.check_assertions
+.. autofunction:: pyspectre.check_assertions
 
-.. autofunction:: shadow_vm.format_result
+.. autofunction:: pyspectre.format_result
 
 
 Core Classes
@@ -26,21 +26,21 @@ Core Classes
 ExecutionResult
 ~~~~~~~~~~~~~~~
 
-.. autoclass:: shadow_vm.ExecutionResult
+.. autoclass:: pyspectre.ExecutionResult
    :members:
    :undoc-members:
 
 Issue
 ~~~~~
 
-.. autoclass:: shadow_vm.Issue
+.. autoclass:: pyspectre.Issue
    :members:
    :undoc-members:
 
 IssueKind
 ~~~~~~~~~
 
-.. autoclass:: shadow_vm.IssueKind
+.. autoclass:: pyspectre.IssueKind
    :members:
    :undoc-members:
 
@@ -51,14 +51,14 @@ Execution
 SymbolicExecutor
 ~~~~~~~~~~~~~~~~
 
-.. autoclass:: shadow_vm.execution.executor.SymbolicExecutor
+.. autoclass:: pyspectre.execution.executor.SymbolicExecutor
    :members:
    :undoc-members:
 
 ExecutionConfig
 ~~~~~~~~~~~~~~~
 
-.. autoclass:: shadow_vm.execution.executor.ExecutionConfig
+.. autoclass:: pyspectre.execution.executor.ExecutionConfig
    :members:
    :undoc-members:
 
@@ -69,21 +69,21 @@ Types
 SymbolicValue
 ~~~~~~~~~~~~~
 
-.. autoclass:: shadow_vm.core.types.SymbolicValue
+.. autoclass:: pyspectre.core.types.SymbolicValue
    :members:
    :undoc-members:
 
 SymbolicString
 ~~~~~~~~~~~~~~
 
-.. autoclass:: shadow_vm.core.types.SymbolicString
+.. autoclass:: pyspectre.core.types.SymbolicString
    :members:
    :undoc-members:
 
 SymbolicList
 ~~~~~~~~~~~~
 
-.. autoclass:: shadow_vm.core.types.SymbolicList
+.. autoclass:: pyspectre.core.types.SymbolicList
    :members:
    :undoc-members:
 
@@ -94,14 +94,14 @@ Analysis
 DetectorRegistry
 ~~~~~~~~~~~~~~~~
 
-.. autoclass:: shadow_vm.analysis.detectors.DetectorRegistry
+.. autoclass:: pyspectre.analysis.detectors.DetectorRegistry
    :members:
    :undoc-members:
 
 PathManager
 ~~~~~~~~~~~
 
-.. autoclass:: shadow_vm.analysis.path_manager.PathManager
+.. autoclass:: pyspectre.analysis.path_manager.PathManager
    :members:
    :undoc-members:
 
@@ -109,16 +109,16 @@ PathManager
 Formatters
 ----------
 
-.. autofunction:: shadow_vm.reporting.formatters.format_result
+.. autofunction:: pyspectre.reporting.formatters.format_result
 
-.. autoclass:: shadow_vm.reporting.formatters.TextFormatter
+.. autoclass:: pyspectre.reporting.formatters.TextFormatter
    :members:
 
-.. autoclass:: shadow_vm.reporting.formatters.JSONFormatter
+.. autoclass:: pyspectre.reporting.formatters.JSONFormatter
    :members:
 
-.. autoclass:: shadow_vm.reporting.formatters.HTMLFormatter
+.. autoclass:: pyspectre.reporting.formatters.HTMLFormatter
    :members:
 
-.. autoclass:: shadow_vm.reporting.formatters.MarkdownFormatter
+.. autoclass:: pyspectre.reporting.formatters.MarkdownFormatter
    :members:

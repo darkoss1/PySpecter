@@ -7,9 +7,7 @@ This module provides mathematical property verification:
 - Termination analysis
 Uses Z3 to prove properties hold for all inputs within constraints.
 """
-
 from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -18,17 +16,12 @@ from typing import (
     Any,
     TypeVar,
 )
-
 import z3
-
 if TYPE_CHECKING:
     pass
 T = TypeVar("T")
-
-
 class PropertyKind(Enum):
     """Categories of mathematical properties."""
-
     COMMUTATIVITY = auto()
     ASSOCIATIVITY = auto()
     DISTRIBUTIVITY = auto()
@@ -55,22 +48,16 @@ class PropertyKind(Enum):
     INJECTIVE = auto()
     SURJECTIVE = auto()
     BIJECTIVE = auto()
-
-
 class ProofStatus(Enum):
     """Status of a property proof."""
-
     PROVEN = auto()
     DISPROVEN = auto()
     UNKNOWN = auto()
     TIMEOUT = auto()
     CONDITIONAL = auto()
-
-
 @dataclass
 class PropertySpec:
     """Specification of a property to verify."""
-
     kind: PropertyKind
     name: str
     description: str = ""
@@ -78,27 +65,21 @@ class PropertySpec:
     lower_bound: z3.ExprRef | None = None
     upper_bound: z3.ExprRef | None = None
     equivalent_expr: z3.ExprRef | None = None
-
-
 @dataclass
 class PropertyProof:
     """Result of attempting to prove a property."""
-
     property: PropertySpec
     status: ProofStatus
     counterexample: dict[str, Any] | None = None
     witness: dict[str, Any] | None = None
     conditions: list[z3.BoolRef] = field(default_factory=list)
     time_seconds: float = 0.0
-
     @property
     def is_proven(self) -> bool:
         return self.status == ProofStatus.PROVEN
-
     @property
     def is_disproven(self) -> bool:
         return self.status == ProofStatus.DISPROVEN
-
     def format(self) -> str:
         """Format proof result for display."""
         status_symbol = {
@@ -114,8 +95,6 @@ class PropertyProof:
         if self.conditions:
             result += f"\n  Conditions: {len(self.conditions)} additional constraints"
         return result
-
-
 class PropertyProver:
     """Proves mathematical properties using Z3.
     Supports:
@@ -124,12 +103,10 @@ class PropertyProver:
     - Monotonicity proofs
     - Equivalence checking
     """
-
     def __init__(self, timeout_ms: int = 10000):
         self.timeout_ms = timeout_ms
         self._solver = z3.Solver()
         self._solver.set("timeout", timeout_ms)
-
     def prove_commutativity(
         self,
         f: Callable[[z3.ExprRef, z3.ExprRef], z3.ExprRef],
@@ -151,7 +128,6 @@ class PropertyProver:
         rhs = f(b, a)
         self._solver.add(lhs != rhs)
         return self._check_proof(spec, {"a": a, "b": b})
-
     def prove_associativity(
         self,
         f: Callable[[z3.ExprRef, z3.ExprRef], z3.ExprRef],
@@ -174,7 +150,6 @@ class PropertyProver:
         rhs = f(a, f(b, c))
         self._solver.add(lhs != rhs)
         return self._check_proof(spec, {"a": a, "b": b, "c": c})
-
     def prove_identity(
         self,
         f: Callable[[z3.ExprRef, z3.ExprRef], z3.ExprRef],
@@ -195,7 +170,6 @@ class PropertyProver:
         result = f(a, identity)
         self._solver.add(result != a)
         return self._check_proof(spec, {"a": a})
-
     def prove_idempotence(
         self,
         f: Callable[[z3.ExprRef, z3.ExprRef], z3.ExprRef],
@@ -215,7 +189,6 @@ class PropertyProver:
         result = f(a, a)
         self._solver.add(result != a)
         return self._check_proof(spec, {"a": a})
-
     def prove_monotonic_increasing(
         self,
         f: Callable[[z3.ExprRef], z3.ExprRef],
@@ -243,7 +216,6 @@ class PropertyProver:
             self._solver.add(x <= y)
             self._solver.add(z3.Not(f(x) <= f(y)))
         return self._check_proof(spec, {"x": x, "y": y})
-
     def prove_monotonic_decreasing(
         self,
         f: Callable[[z3.ExprRef], z3.ExprRef],
@@ -269,7 +241,6 @@ class PropertyProver:
             self._solver.add(x <= y)
             self._solver.add(z3.Not(f(x) >= f(y)))
         return self._check_proof(spec, {"x": x, "y": y})
-
     def prove_lower_bound(
         self,
         expr: z3.ExprRef,
@@ -290,7 +261,6 @@ class PropertyProver:
             self._solver.add(constraint)
         self._solver.add(expr < bound)
         return self._check_proof(spec, variables)
-
     def prove_upper_bound(
         self,
         expr: z3.ExprRef,
@@ -311,7 +281,6 @@ class PropertyProver:
             self._solver.add(constraint)
         self._solver.add(expr > bound)
         return self._check_proof(spec, variables)
-
     def prove_bounded(
         self,
         expr: z3.ExprRef,
@@ -334,7 +303,6 @@ class PropertyProver:
             self._solver.add(constraint)
         self._solver.add(z3.Or(expr < lower, expr > upper))
         return self._check_proof(spec, variables)
-
     def prove_non_negative(
         self,
         expr: z3.ExprRef,
@@ -343,7 +311,6 @@ class PropertyProver:
     ) -> PropertyProof:
         """Prove expr >= 0 for all inputs."""
         return self.prove_lower_bound(expr, z3.IntVal(0), variables, constraints)
-
     def prove_positive(
         self,
         expr: z3.ExprRef,
@@ -362,7 +329,6 @@ class PropertyProver:
             self._solver.add(constraint)
         self._solver.add(expr <= 0)
         return self._check_proof(spec, variables)
-
     def prove_equivalence(
         self,
         expr1: z3.ExprRef,
@@ -383,7 +349,6 @@ class PropertyProver:
             self._solver.add(constraint)
         self._solver.add(expr1 != expr2)
         return self._check_proof(spec, variables)
-
     def prove_even_function(
         self,
         f: Callable[[z3.ExprRef], z3.ExprRef],
@@ -402,7 +367,6 @@ class PropertyProver:
             self._solver.add(constraint)
         self._solver.add(f(-x) != f(x))
         return self._check_proof(spec, {"x": x})
-
     def prove_odd_function(
         self,
         f: Callable[[z3.ExprRef], z3.ExprRef],
@@ -421,7 +385,6 @@ class PropertyProver:
             self._solver.add(constraint)
         self._solver.add(f(-x) != -f(x))
         return self._check_proof(spec, {"x": x})
-
     def prove_injective(
         self,
         f: Callable[[z3.ExprRef], z3.ExprRef],
@@ -442,7 +405,6 @@ class PropertyProver:
         self._solver.add(f(x) == f(y))
         self._solver.add(x != y)
         return self._check_proof(spec, {"x": x, "y": y})
-
     def prove_custom(
         self,
         name: str,
@@ -463,7 +425,6 @@ class PropertyProver:
             self._solver.add(constraint)
         self._solver.add(z3.Not(property_expr))
         return self._check_proof(spec, variables)
-
     def _check_proof(
         self,
         spec: PropertySpec,
@@ -471,7 +432,6 @@ class PropertyProver:
     ) -> PropertyProof:
         """Check solver and construct proof result."""
         import time
-
         start = time.time()
         result = self._solver.check()
         elapsed = time.time() - start
@@ -498,7 +458,6 @@ class PropertyProver:
                 ),
                 time_seconds=elapsed,
             )
-
     def _extract_model(
         self,
         model: z3.ModelRef,
@@ -522,8 +481,6 @@ class PropertyProver:
             except Exception:
                 pass
         return result
-
-
 class ArithmeticVerifier:
     """Verifies arithmetic properties and detects potential issues.
     Checks for:
@@ -532,7 +489,6 @@ class ArithmeticVerifier:
     - Precision loss in float operations
     - Numeric bounds violations
     """
-
     def __init__(self, int_bits: int = 64, timeout_ms: int = 5000):
         self.int_bits = int_bits
         self.int_min = -(2 ** (int_bits - 1))
@@ -540,7 +496,6 @@ class ArithmeticVerifier:
         self.timeout_ms = timeout_ms
         self._solver = z3.Solver()
         self._solver.set("timeout", timeout_ms)
-
     def check_overflow(
         self,
         expr: z3.ExprRef,
@@ -576,7 +531,6 @@ class ArithmeticVerifier:
             )
         else:
             return PropertyProof(property=spec, status=ProofStatus.UNKNOWN)
-
     def check_underflow(
         self,
         expr: z3.ExprRef,
@@ -585,7 +539,6 @@ class ArithmeticVerifier:
     ) -> PropertyProof:
         """Check if expression can underflow (go below minimum)."""
         return self.check_overflow(expr, variables, constraints)
-
     def check_division_safe(
         self,
         dividend: z3.ExprRef,
@@ -622,7 +575,6 @@ class ArithmeticVerifier:
             )
         else:
             return PropertyProof(property=spec, status=ProofStatus.UNKNOWN)
-
     def check_array_bounds(
         self,
         index: z3.ExprRef,
@@ -659,8 +611,6 @@ class ArithmeticVerifier:
             )
         else:
             return PropertyProof(property=spec, status=ProofStatus.UNKNOWN)
-
-
 class EquivalenceChecker:
     """Proves equivalence between different implementations.
     Useful for:
@@ -668,12 +618,10 @@ class EquivalenceChecker:
     - Checking refactored code is equivalent to original
     - Proving algebraic simplifications are valid
     """
-
     def __init__(self, timeout_ms: int = 10000):
         self.timeout_ms = timeout_ms
         self._solver = z3.Solver()
         self._solver.set("timeout", timeout_ms)
-
     def check_equivalent(
         self,
         impl1: Callable[..., z3.ExprRef],
@@ -712,7 +660,6 @@ class EquivalenceChecker:
             )
         else:
             return PropertyProof(property=spec, status=ProofStatus.UNKNOWN)
-
     def check_refinement(
         self,
         spec_impl: Callable[..., z3.BoolRef],
@@ -754,8 +701,6 @@ class EquivalenceChecker:
             )
         else:
             return PropertyProof(property=spec, status=ProofStatus.UNKNOWN)
-
-
 __all__ = [
     "PropertyKind",
     "ProofStatus",

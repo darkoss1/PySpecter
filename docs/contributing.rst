@@ -1,7 +1,7 @@
-Contributing to Shadow VM
+Contributing to PySpectre
 =========================
 
-Thank you for your interest in contributing to Shadow VM!
+Thank you for your interest in contributing to PySpectre!
 
 
 Development Setup
@@ -11,8 +11,8 @@ Development Setup
 
    .. code-block:: bash
 
-      git clone https://github.com/shadow-vm/shadow-vm.git
-      cd shadow-vm
+      git clone https://github.com/darkoss1/pyspectre.git
+      cd pyspectre
 
 2. Create a virtual environment:
 
@@ -41,7 +41,7 @@ With coverage:
 
 .. code-block:: bash
 
-   pytest tests/ -v --cov=shadow_vm --cov-report=html
+   pytest tests/ -v --cov=pyspectre --cov-report=html
 
 
 Code Style
@@ -52,10 +52,10 @@ We use Black for formatting and Ruff for linting:
 .. code-block:: bash
 
    # Format code
-   black shadow_vm/ tests/
+   black pyspectre/ tests/
 
    # Lint code
-   ruff check shadow_vm/ tests/
+   ruff check pyspectre/ tests/
 
 
 Type Checking
@@ -65,7 +65,7 @@ Run MyPy for type checking:
 
 .. code-block:: bash
 
-   mypy shadow_vm/
+   mypy pyspectre/
 
 
 Adding New Opcodes
@@ -73,7 +73,7 @@ Adding New Opcodes
 
 To add support for a new Python opcode:
 
-1. Find the appropriate module in ``shadow_vm/execution/opcodes/``
+1. Find the appropriate module in ``pyspectre/execution/opcodes/``
 2. Add a handler function:
 
    .. code-block:: python
@@ -96,7 +96,7 @@ To add a new bug detector:
 2. Implement the ``check()`` method
 3. Register with the ``DetectorRegistry``
 
-See ``shadow_vm/analysis/advanced_detectors.py`` for examples.
+See ``pyspectre/analysis/advanced_detectors.py`` for examples.
 
 
 Pull Request Guidelines
@@ -115,7 +115,7 @@ Reporting Issues
 When reporting bugs, please include:
 
 - Python version
-- Shadow VM version
+- PySpectre version
 - Minimal reproduction example
 - Full error message/traceback
 
@@ -123,5 +123,5 @@ When reporting bugs, please include:
 Contact
 -------
 
-- GitHub Issues: https://github.com/shadow-vm/shadow-vm/issues
-- Discussions: https://github.com/shadow-vm/shadow-vm/discussions
+- GitHub Issues: https://github.com/darkoss1/pyspectre/issues
+- Discussions: https://github.com/darkoss1/pyspectre/discussions

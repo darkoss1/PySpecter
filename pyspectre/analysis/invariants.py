@@ -6,18 +6,13 @@ This module provides:
 - InvariantChecker: Validates invariants at method boundaries
 - InvariantViolation: Reports invariant failures
 """
-
 from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import (
     Any,
 )
-
 import z3
-
-
 @dataclass
 class ClassInvariant:
     """
@@ -30,17 +25,13 @@ class ClassInvariant:
         message: Optional description
         class_name: Name of the class this invariant belongs to
     """
-
     condition: str
     message: str | None = None
     class_name: str = ""
-
     def __str__(self) -> str:
         if self.message:
             return f"{self.condition} ({self.message})"
         return self.condition
-
-
 @dataclass
 class InvariantViolation:
     """
@@ -52,17 +43,13 @@ class InvariantViolation:
         z3_condition: Z3 formula that was violated
         counterexample: Optional counterexample values
     """
-
     invariant: ClassInvariant
     when: str
     method_name: str
     z3_condition: z3.BoolRef | None = None
     counterexample: dict[str, Any] | None = None
-
     def __str__(self) -> str:
         return f"Invariant '{self.invariant}' violated at {self.when} " f"of {self.method_name}"
-
-
 def invariant(
     condition: str,
     message: str | None = None,
@@ -78,7 +65,6 @@ def invariant(
     - After __init__ returns
     - Before and after every public method (not starting with _)
     """
-
     def decorator(cls: type) -> type:
         if not hasattr(cls, "__invariants__"):
             cls.__invariants__ = []
@@ -90,10 +76,7 @@ def invariant(
             )
         )
         return cls
-
     return decorator
-
-
 def get_invariants(cls: type) -> list[ClassInvariant]:
     """Get all invariants for a class, including inherited ones."""
     invariants = []
@@ -108,8 +91,6 @@ def get_invariants(cls: type) -> list[ClassInvariant]:
                     )
                 )
     return invariants
-
-
 class InvariantChecker:
     """
     Checks class invariants during symbolic execution.
@@ -118,21 +99,17 @@ class InvariantChecker:
     2. Check if it can be violated given current constraints
     3. Report violations with counterexamples
     """
-
     def __init__(self, solver: z3.Solver | None = None):
         self.solver = solver or z3.Solver()
         self._violations: list[InvariantViolation] = []
         self._checked_invariants: set[tuple[str, str, str]] = set()
-
     @property
     def violations(self) -> list[InvariantViolation]:
         """Get all recorded violations."""
         return self._violations
-
     def clear_violations(self) -> None:
         """Clear recorded violations."""
         self._violations = []
-
     def check_invariant(
         self,
         inv: ClassInvariant,
@@ -171,7 +148,6 @@ class InvariantChecker:
             return False
         self.solver.pop()
         return True
-
     def check_all_invariants(
         self,
         invariants: list[ClassInvariant],
@@ -188,7 +164,6 @@ class InvariantChecker:
             if not self.check_invariant(inv, cond, when, method_name, path_constraints):
                 violations.append(self._violations[-1])
         return violations
-
     def check_init_exit(
         self,
         invariants: list[ClassInvariant],
@@ -199,7 +174,6 @@ class InvariantChecker:
         return self.check_all_invariants(
             invariants, z3_conditions, "init", "__init__", path_constraints
         )
-
     def check_method_entry(
         self,
         invariants: list[ClassInvariant],
@@ -211,7 +185,6 @@ class InvariantChecker:
         return self.check_all_invariants(
             invariants, z3_conditions, "entry", method_name, path_constraints
         )
-
     def check_method_exit(
         self,
         invariants: list[ClassInvariant],
@@ -223,7 +196,6 @@ class InvariantChecker:
         return self.check_all_invariants(
             invariants, z3_conditions, "exit", method_name, path_constraints
         )
-
     def _extract_counterexample(
         self,
         model: z3.ModelRef,
@@ -242,8 +214,6 @@ class InvariantChecker:
             else:
                 result[name] = str(value)
         return result
-
-
 @dataclass
 class InvariantState:
     """
@@ -253,17 +223,14 @@ class InvariantState:
         active_checks: Currently being verified
         violations: All violations found
     """
-
     class_invariants: dict[str, list[ClassInvariant]] = field(default_factory=dict)
     violations: list[InvariantViolation] = field(default_factory=list)
     _checker: InvariantChecker | None = None
-
     @property
     def checker(self) -> InvariantChecker:
         if self._checker is None:
             self._checker = InvariantChecker()
         return self._checker
-
     def register_class(
         self,
         class_name: str,
@@ -271,34 +238,27 @@ class InvariantState:
     ) -> None:
         """Register invariants for a class."""
         self.class_invariants[class_name] = invariants
-
     def get_invariants(self, class_name: str) -> list[ClassInvariant]:
         """Get invariants for a class."""
         return self.class_invariants.get(class_name, [])
-
     def record_violation(self, violation: InvariantViolation) -> None:
         """Record an invariant violation."""
         self.violations.append(violation)
-
     def has_violations(self) -> bool:
         """Check if any violations were found."""
         return len(self.violations) > 0
-
     def get_violations_for_class(
         self,
         class_name: str,
     ) -> list[InvariantViolation]:
         """Get violations for a specific class."""
         return [v for v in self.violations if v.invariant.class_name == class_name]
-
     def clone(self) -> InvariantState:
         """Create a copy of invariant state."""
         state = InvariantState()
         state.class_invariants = dict(self.class_invariants)
         state.violations = list(self.violations)
         return state
-
-
 def parse_invariant_condition(
     condition: str,
     self_attrs: dict[str, z3.ExprRef],
@@ -316,7 +276,6 @@ def parse_invariant_condition(
         Z3 boolean expression
     """
     import re
-
     expr = condition
     comparisons = [
         (r"(\S+)\s*>=\s*(\S+)", lambda m: _parse_cmp(m, ">=", self_attrs)),
@@ -333,8 +292,6 @@ def parse_invariant_condition(
         if match:
             return handler(match)
     return z3.Bool(f"inv_{condition[:20]}")
-
-
 def _parse_value(s: str, self_attrs: dict[str, z3.ExprRef]) -> z3.ExprRef:
     """Parse a value (self.attr or literal) to Z3."""
     s = s.strip()
@@ -354,8 +311,6 @@ def _parse_value(s: str, self_attrs: dict[str, z3.ExprRef]) -> z3.ExprRef:
     except ValueError:
         pass
     return z3.Int(s)
-
-
 def _parse_cmp(
     match: Any,
     op: str,
@@ -377,24 +332,18 @@ def _parse_cmp(
     elif op == "!=":
         return left != right
     return z3.BoolVal(True)
-
-
 def _parse_not_none(
     match: Any,
     self_attrs: dict[str, z3.ExprRef],
 ) -> z3.BoolRef:
     """Parse 'x is not None' expression."""
     return z3.BoolVal(True)
-
-
 def _parse_is_none(
     match: Any,
     self_attrs: dict[str, z3.ExprRef],
 ) -> z3.BoolRef:
     """Parse 'x is None' expression."""
     return z3.BoolVal(False)
-
-
 def check_object_invariants(
     obj: Any,
     invariant_state: InvariantState,

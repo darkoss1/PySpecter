@@ -11,9 +11,7 @@ Features:
 - Cross-function analysis
 - Abstract interpretation
 """
-
 from __future__ import annotations
-
 import dis
 import json
 import sys
@@ -24,7 +22,6 @@ from pathlib import Path
 from typing import (
     Any,
 )
-
 from .dead_code import DeadCodeAnalyzer
 from .enhanced_detectors import (
     EnhancedAnalyzer,
@@ -36,12 +33,9 @@ from .resource_analysis import ResourceAnalyzer
 from .string_analysis import StringAnalyzer
 from .taint_analysis import TaintChecker, TaintKind
 from .type_inference import TypeAnalyzer
-
-
 @dataclass
 class ScannerConfig:
     """Configuration for the enhanced scanner."""
-
     enable_type_inference: bool = True
     enable_flow_analysis: bool = True
     enable_pattern_recognition: bool = True
@@ -60,23 +54,17 @@ class ScannerConfig:
     max_function_size: int = 10000
     max_path_depth: int = 50
     timeout_per_function: float = 10.0
-
-
 class IssueCategory(Enum):
     """Categories for grouping issues."""
-
     BUG = auto()
     SECURITY = auto()
     PERFORMANCE = auto()
     STYLE = auto()
     RESOURCE = auto()
     DEAD_CODE = auto()
-
-
 @dataclass
 class EnhancedIssue:
     """Issue with enhanced metadata."""
-
     category: IssueCategory
     kind: str
     severity: str
@@ -89,11 +77,9 @@ class EnhancedIssue:
     suggestion: str = ""
     detected_by: list[str] = field(default_factory=list)
     suppression_reasons: list[str] = field(default_factory=list)
-
     def is_suppressed(self) -> bool:
         """Check if issue should be suppressed."""
         return bool(self.suppression_reasons)
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -110,12 +96,9 @@ class EnhancedIssue:
             "suppressed": self.is_suppressed(),
             "suppression_reasons": self.suppression_reasons,
         }
-
-
 @dataclass
 class AnalysisContext:
     """Context passed between analysis phases."""
-
     file_path: str
     source: str
     code: Any
@@ -124,13 +107,9 @@ class AnalysisContext:
     ranges: dict[str, Any] = field(default_factory=dict)
     taint: dict[str, set[TaintKind]] = field(default_factory=dict)
     function_summaries: dict[str, Any] = field(default_factory=dict)
-
-
 class AnalysisPhase:
     """Base class for analysis phases."""
-
     name: str = "base"
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -138,16 +117,11 @@ class AnalysisPhase:
     ) -> list[EnhancedIssue]:
         """Run analysis phase."""
         raise NotImplementedError
-
-
 class TypeInferencePhase(AnalysisPhase):
     """Phase 1: Type inference."""
-
     name = "type_inference"
-
     def __init__(self) -> None:
         self.analyzer = TypeAnalyzer()
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -159,16 +133,11 @@ class TypeInferencePhase(AnalysisPhase):
         type_env = self.analyzer.analyze_function(ctx.code)
         ctx.types = type_env
         return []
-
-
 class PatternRecognitionPhase(AnalysisPhase):
     """Phase 2: Recognize safe patterns."""
-
     name = "pattern_recognition"
-
     def __init__(self) -> None:
         self.analyzer = PatternAnalyzer()
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -180,16 +149,11 @@ class PatternRecognitionPhase(AnalysisPhase):
         patterns = self.analyzer.analyze_function(ctx.code)
         ctx.patterns = patterns
         return []
-
-
 class FlowAnalysisPhase(AnalysisPhase):
     """Phase 3: Flow-sensitive analysis."""
-
     name = "flow_analysis"
-
     def __init__(self) -> None:
         self.analyzer = FlowSensitiveAnalyzer()
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -203,16 +167,11 @@ class FlowAnalysisPhase(AnalysisPhase):
         except Exception:
             pass
         return []
-
-
 class BugDetectionPhase(AnalysisPhase):
     """Phase 4: Bug detection with all context."""
-
     name = "bug_detection"
-
     def __init__(self) -> None:
         self.analyzer = EnhancedAnalyzer()
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -243,7 +202,6 @@ class BugDetectionPhase(AnalysisPhase):
             if enhanced.confidence >= config.min_confidence:
                 issues.append(enhanced)
         return issues
-
     def _check_suppression(
         self,
         issue: EnhancedIssue,
@@ -262,16 +220,11 @@ class BugDetectionPhase(AnalysisPhase):
             if issue.kind == "INDEX_ERROR" and PatternKind.ENUMERATE_ITER in patterns:
                 issue.suppression_reasons.append("enumerate provides valid indices")
                 issue.confidence *= 0.1
-
-
 class DeadCodePhase(AnalysisPhase):
     """Phase 5: Dead code detection."""
-
     name = "dead_code"
-
     def __init__(self) -> None:
         self.analyzer = DeadCodeAnalyzer()
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -297,16 +250,11 @@ class DeadCodePhase(AnalysisPhase):
                 )
             )
         return issues
-
-
 class ResourcePhase(AnalysisPhase):
     """Phase 6: Resource leak detection."""
-
     name = "resource_analysis"
-
     def __init__(self) -> None:
         self.analyzer = ResourceAnalyzer()
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -332,17 +280,12 @@ class ResourcePhase(AnalysisPhase):
                 )
             )
         return issues
-
-
 class SecurityPhase(AnalysisPhase):
     """Phase 7: Security analysis (taint + string)."""
-
     name = "security"
-
     def __init__(self) -> None:
         self.taint_checker = TaintChecker()
         self.string_analyzer = StringAnalyzer()
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -382,16 +325,11 @@ class SecurityPhase(AnalysisPhase):
                     )
                 )
         return issues
-
-
 class ExceptionPhase(AnalysisPhase):
     """Phase 8: Exception handling analysis."""
-
     name = "exception"
-
     def __init__(self) -> None:
         self.analyzer = ExceptionAnalyzer()
-
     def analyze(
         self,
         ctx: AnalysisContext,
@@ -416,13 +354,10 @@ class ExceptionPhase(AnalysisPhase):
                 )
             )
         return issues
-
-
 class EnhancedScanner:
     """
     Enhanced scanner with multi-phase analysis pipeline.
     """
-
     def __init__(self, config: ScannerConfig | None = None) -> None:
         self.config = config or ScannerConfig()
         self.phases: list[AnalysisPhase] = [
@@ -436,7 +371,6 @@ class EnhancedScanner:
             ExceptionPhase(),
         ]
         self.stats: dict[str, int] = defaultdict(int)
-
     def scan_file(self, file_path: str) -> list[EnhancedIssue]:
         """Scan a single file."""
         issues: list[EnhancedIssue] = []
@@ -471,7 +405,6 @@ class EnhancedScanner:
                 print(f"Error scanning {file_path}: {e}")
             self.stats["scan_errors"] += 1
         return issues
-
     def _scan_nested(
         self,
         code: Any,
@@ -492,7 +425,6 @@ class EnhancedScanner:
                 )
                 issues.extend(self._run_phases(ctx))
                 self._scan_nested(const, source, file_path, issues)
-
     def _run_phases(self, ctx: AnalysisContext) -> list[EnhancedIssue]:
         """Run all analysis phases."""
         all_issues: list[EnhancedIssue] = []
@@ -505,7 +437,6 @@ class EnhancedScanner:
                     print(f"Phase {phase.name} failed: {e}")
                 self.stats[f"{phase.name}_errors"] += 1
         return all_issues
-
     def scan_directory(
         self,
         directory: str,
@@ -519,7 +450,6 @@ class EnhancedScanner:
                 issues = self.scan_file(str(file_path))
                 all_issues.extend(issues)
         return all_issues
-
     def generate_report(
         self,
         issues: list[EnhancedIssue],
@@ -566,12 +496,9 @@ class EnhancedScanner:
         lines.append(f"Suppressed (likely false positives): {suppressed}")
         lines.append(f"Files scanned: {self.stats.get('files_scanned', 0)}")
         return "\n".join(lines)
-
-
 def main() -> int:
     """Command-line interface."""
     import argparse
-
     parser = argparse.ArgumentParser(
         description="PySpectre Enhanced Scanner v2.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -629,7 +556,5 @@ def main() -> int:
     print(report)
     errors = sum(1 for i in issues if i.severity == "error" and not i.is_suppressed())
     return 1 if errors > 0 else 0
-
-
 if __name__ == "__main__":
     sys.exit(main())

@@ -6,9 +6,7 @@ This module integrates symbolic execution with formal verification:
 - Proves termination using ranking functions
 - Infers and verifies properties from execution traces
 """
-
 from __future__ import annotations
-
 import dis
 import inspect
 import types
@@ -18,9 +16,7 @@ from enum import Enum, auto
 from typing import (
     Any,
 )
-
 import z3
-
 from pyspectre.analysis.contracts import (
     ContractCompiler,
     ContractKind,
@@ -45,17 +41,12 @@ from pyspectre.core.solver import ShadowSolver, is_satisfiable
 from pyspectre.core.state import VMState
 from pyspectre.core.types import SymbolicList, SymbolicString, SymbolicValue
 from pyspectre.execution.dispatcher import OpcodeDispatcher
-
-
 class TerminationStatus(Enum):
     """Result of termination analysis."""
-
     TERMINATES = auto()
     NON_TERMINATING = auto()
     UNKNOWN = auto()
     BOUNDED = auto()
-
-
 @dataclass
 class RankingFunction:
     """A ranking function for termination proofs.
@@ -63,39 +54,30 @@ class RankingFunction:
     1. r(state) >= 0 (bounded below)
     2. r(state') < r(state) for each iteration (strictly decreasing)
     """
-
     name: str
     expression: str
     z3_expr: z3.ExprRef | None = None
     variables: list[str] = field(default_factory=list)
-
     def compile(self, symbols: dict[str, z3.ExprRef]) -> z3.ArithRef:
         """Compile to Z3 expression."""
         if self.z3_expr is not None:
             return self.z3_expr
         self.z3_expr = ContractCompiler.compile_expression(self.expression, symbols)
         return self.z3_expr
-
-
 @dataclass
 class TerminationProof:
     """Result of termination analysis."""
-
     status: TerminationStatus
     ranking_function: RankingFunction | None = None
     bound: int | None = None
     counterexample: dict[str, Any] | None = None
     message: str = ""
-
-
 class TerminationAnalyzer:
     """Analyzes loop termination using ranking functions."""
-
     def __init__(self, timeout_ms: int = 5000):
         self.timeout_ms = timeout_ms
         self._solver = z3.Solver()
         self._solver.set("timeout", timeout_ms)
-
     def check_termination(
         self,
         loop_condition: z3.BoolRef,
@@ -116,7 +98,6 @@ class TerminationAnalyzer:
         if ranking is not None:
             return self._verify_ranking_function(loop_condition, loop_body_effect, symbols, ranking)
         return self._synthesize_ranking(loop_condition, loop_body_effect, symbols)
-
     def _verify_ranking_function(
         self,
         loop_condition: z3.BoolRef,
@@ -176,7 +157,6 @@ class TerminationAnalyzer:
             ranking_function=ranking,
             message="Could not verify ranking function (timeout)",
         )
-
     def _synthesize_ranking(
         self,
         loop_condition: z3.BoolRef,
@@ -211,7 +191,6 @@ class TerminationAnalyzer:
         return TerminationProof(
             status=TerminationStatus.UNKNOWN, message="Could not synthesize ranking function"
         )
-
     def _extract_values(
         self,
         model: z3.ModelRef,
@@ -229,12 +208,9 @@ class TerminationAnalyzer:
             except Exception:
                 pass
         return result
-
-
 @dataclass
 class VerifiedExecutionConfig:
     """Configuration for verified symbolic execution."""
-
     max_paths: int = 1000
     max_depth: int = 100
     max_iterations: int = 10000
@@ -262,12 +238,9 @@ class VerifiedExecutionConfig:
     verbose: bool = False
     collect_coverage: bool = True
     symbolic_args: dict[str, str] = field(default_factory=dict)
-
-
 @dataclass
 class ContractIssue:
     """A contract-related issue found during execution."""
-
     kind: ContractKind
     condition: str
     message: str
@@ -275,7 +248,6 @@ class ContractIssue:
     function_name: str | None = None
     counterexample: dict[str, Any] = field(default_factory=dict)
     result: VerificationResult = VerificationResult.VIOLATED
-
     def format(self) -> str:
         """Format for display."""
         location = f" at line {self.line_number}" if self.line_number else ""
@@ -288,18 +260,14 @@ class ContractIssue:
             for var, val in self.counterexample.items():
                 result += f"    {var} = {val}\n"
         return result
-
-
 @dataclass
 class ArithmeticIssue:
     """An arithmetic safety issue found during execution."""
-
     kind: str
     expression: str
     message: str
     line_number: int | None = None
     counterexample: dict[str, Any] = field(default_factory=dict)
-
     def format(self) -> str:
         """Format for display."""
         location = f" at line {self.line_number}" if self.line_number else ""
@@ -310,22 +278,16 @@ class ArithmeticIssue:
             for var, val in self.counterexample.items():
                 result += f"    {var} = {val}\n"
         return result
-
-
 @dataclass
 class InferredProperty:
     """A property inferred from execution traces."""
-
     kind: PropertyKind
     description: str
     confidence: float
     proof: PropertyProof | None = None
-
-
 @dataclass
 class VerifiedExecutionResult:
     """Result of verified symbolic execution."""
-
     issues: list[Issue] = field(default_factory=list)
     paths_explored: int = 0
     paths_completed: int = 0
@@ -341,7 +303,6 @@ class VerifiedExecutionResult:
     arithmetic_issues: list[ArithmeticIssue] = field(default_factory=list)
     termination_proof: TerminationProof | None = None
     inferred_properties: list[InferredProperty] = field(default_factory=list)
-
     @property
     def is_verified(self) -> bool:
         """Check if function is fully verified."""
@@ -350,14 +311,12 @@ class VerifiedExecutionResult:
             and len(self.contract_issues) == 0
             and len(self.arithmetic_issues) == 0
         )
-
     @property
     def has_issues(self) -> bool:
         """Check if any issues were found."""
         return (
             len(self.issues) > 0 or len(self.contract_issues) > 0 or len(self.arithmetic_issues) > 0
         )
-
     def format_summary(self) -> str:
         """Format a summary of results."""
         lines = [
@@ -395,8 +354,6 @@ class VerifiedExecutionResult:
                 status = "✓" if prop.proof and prop.proof.status == ProofStatus.PROVEN else "?"
                 lines.append(f"  {status} {prop.description}")
         return "\n".join(lines)
-
-
 class VerifiedExecutor:
     """Symbolic executor with integrated contract and property verification.
     This executor extends symbolic execution with:
@@ -407,13 +364,14 @@ class VerifiedExecutor:
     5. Arithmetic safety verification
     6. Property inference from execution traces
     """
-
     def __init__(
         self,
         config: VerifiedExecutionConfig | None = None,
         detector_registry: DetectorRegistry | None = None,
     ):
         self.config = config or VerifiedExecutionConfig()
+        if self.config is None:
+            self.config = VerifiedExecutionConfig()
         self.detector_registry = detector_registry or default_registry
         self.dispatcher = OpcodeDispatcher()
         self.solver = ShadowSolver(timeout_ms=self.config.solver_timeout_ms)
@@ -447,7 +405,6 @@ class VerifiedExecutor:
         self._contracts_checked: int = 0
         self._contracts_verified: int = 0
         self._contracts_violated: int = 0
-
     def execute_function(
         self,
         func: Callable,
@@ -462,7 +419,6 @@ class VerifiedExecutor:
             VerifiedExecutionResult with issues and verification status
         """
         import time
-
         start_time = time.time()
         self._reset()
         self._function_contract = self._extract_contracts(func)
@@ -513,7 +469,6 @@ class VerifiedExecutor:
             inferred_properties=inferred_properties,
         )
         return result
-
     def _reset(self) -> None:
         """Reset execution state."""
         self._instructions = []
@@ -536,7 +491,6 @@ class VerifiedExecutor:
         self._return_values = []
         self._loop_heads = set()
         self._loop_iterations = {}
-
     def _build_line_mapping(self, code: types.CodeType) -> None:
         """Build mapping from PC to source line numbers."""
         last_line = None
@@ -557,7 +511,6 @@ class VerifiedExecutor:
                 last_line = instr.starts_line
             elif last_line:
                 self._pc_to_line[i] = last_line
-
     def _detect_loops(self) -> None:
         """Detect loop headers in bytecode."""
         offset_to_idx = {}
@@ -571,7 +524,6 @@ class VerifiedExecutor:
                     self._loop_heads.add(target_pc)
             elif instr.opname == "FOR_ITER":
                 self._loop_heads.add(i)
-
     def _extract_contracts(self, func: Callable) -> FunctionContract:
         """Extract contracts from function decorators and annotations."""
         contract = FunctionContract(function_name=func.__name__)
@@ -604,7 +556,6 @@ class VerifiedExecutor:
         if func.__doc__:
             contract = self._parse_docstring_contracts(func.__doc__, contract)
         return contract
-
     def _parse_docstring_contracts(
         self,
         docstring: str,
@@ -617,13 +568,11 @@ class VerifiedExecutor:
             :invariant: condition
         """
         import re
-
         for match in re.finditer(r":requires:\s*(.+?)(?:\n|$)", docstring):
             contract.add_precondition(match.group(1).strip())
         for match in re.finditer(r":ensures:\s*(.+?)(?:\n|$)", docstring):
             contract.add_postcondition(match.group(1).strip())
         return contract
-
     def _create_initial_state(
         self,
         func: Callable,
@@ -649,7 +598,6 @@ class VerifiedExecutor:
             else:
                 self._z3_symbols[param] = z3.Int(f"{param}_int")
         return state
-
     def _create_symbolic_for_type(self, name: str, type_hint: str) -> Any:
         """Create a symbolic value of the given type."""
         type_hint = type_hint.lower()
@@ -668,7 +616,6 @@ class VerifiedExecutor:
         else:
             val, constraint = SymbolicValue.symbolic(name)
             return val
-
     def _verify_preconditions(self, initial_state: VMState) -> None:
         """Verify all preconditions at function entry."""
         for contract in self._function_contract.preconditions:
@@ -693,7 +640,6 @@ class VerifiedExecutor:
                         result=result,
                     )
                 )
-
     def _verify_postconditions(self) -> None:
         """Verify postconditions on all collected return paths."""
         for contract in self._function_contract.postconditions:
@@ -733,7 +679,6 @@ class VerifiedExecutor:
                         result=result,
                     )
                 )
-
     def _execute_loop(self) -> None:
         """Main execution loop."""
         while not self._worklist.is_empty():
@@ -746,7 +691,6 @@ class VerifiedExecutor:
                 break
             self._iterations += 1
             self._execute_step(state)
-
     def _execute_step(self, state: VMState) -> None:
         """Execute a single step with verification checks."""
         if state.pc >= len(self._instructions):
@@ -792,7 +736,6 @@ class VerifiedExecutor:
             new_state.depth = state.depth + 1
             self._worklist.add_state(new_state)
             self._paths_explored += 1
-
     def _check_loop_invariants(self, state: VMState) -> None:
         """Check loop invariants at loop header."""
         if not self._function_contract:
@@ -828,7 +771,6 @@ class VerifiedExecutor:
                         result=result,
                     )
                 )
-
     def _check_arithmetic_safety(self, state: VMState, instr: dis.Instruction) -> None:
         """Check for arithmetic safety issues."""
         variables = dict(self._z3_symbols)
@@ -890,7 +832,6 @@ class VerifiedExecutor:
                                 counterexample=proof.counterexample,
                             )
                         )
-
     def _run_detectors(self, state: VMState, instr: dis.Instruction) -> None:
         """Run enabled detectors on current state."""
         for detector in self.detector_registry.get_all():
@@ -910,7 +851,6 @@ class VerifiedExecutor:
             if issue:
                 issue.line_number = self._pc_to_line.get(state.pc)
                 self._issues.append(issue)
-
     def _analyze_termination(self) -> TerminationProof:
         """Analyze termination of loops in the function."""
         if not self._loop_heads:
@@ -927,7 +867,6 @@ class VerifiedExecutor:
             status=TerminationStatus.UNKNOWN,
             message=f"Could not prove termination for {len(self._loop_heads)} loops",
         )
-
     def _analyze_single_loop(self, loop_pc: int) -> TerminationProof:
         """Analyze a single loop for termination."""
         loop_info = self._extract_loop_info(loop_pc)
@@ -983,7 +922,6 @@ class VerifiedExecutor:
         return TerminationProof(
             status=TerminationStatus.UNKNOWN, message="Could not identify loop variable"
         )
-
     def _extract_loop_info(self, loop_pc: int) -> tuple[str, str, str] | None:
         """Extract loop variable, condition type, and update type.
         Returns (variable_name, condition_type, update_type) or None.
@@ -1040,7 +978,6 @@ class VerifiedExecutor:
         if loop_var:
             return (loop_var, condition_type or "unknown", update_type or "unknown", bound_var)
         return None
-
     def _infer_properties(self) -> list[InferredProperty]:
         """Infer properties from execution traces."""
         properties = []
@@ -1057,7 +994,6 @@ class VerifiedExecutor:
                     )
                 )
         return properties
-
     def _hash_state(self, state: VMState) -> int:
         """Create a hash for loop detection."""
         return hash(
@@ -1068,8 +1004,6 @@ class VerifiedExecutor:
                 tuple(sorted(state.local_vars.keys())),
             )
         )
-
-
 def verify(
     func: Callable,
     symbolic_args: dict[str, str] | None = None,
@@ -1094,8 +1028,6 @@ def verify(
     config = VerifiedExecutionConfig(**config_kwargs)
     executor = VerifiedExecutor(config)
     return executor.execute_function(func, symbolic_args)
-
-
 def check_contracts(
     func: Callable, symbolic_args: dict[str, str] | None = None
 ) -> list[ContractIssue]:
@@ -1116,8 +1048,6 @@ def check_contracts(
         check_division_safety=False,
     )
     return result.contract_issues
-
-
 def check_arithmetic(
     func: Callable, symbolic_args: dict[str, str] | None = None
 ) -> list[ArithmeticIssue]:
@@ -1138,8 +1068,6 @@ def check_arithmetic(
         check_division_safety=True,
     )
     return result.arithmetic_issues
-
-
 def prove_termination(
     func: Callable,
     symbolic_args: dict[str, str] | None = None,

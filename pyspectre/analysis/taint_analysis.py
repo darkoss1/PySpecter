@@ -10,27 +10,21 @@ Features:
 - Sanitizer recognition
 - Path-sensitive taint tracking
 """
-
 from __future__ import annotations
-
 import dis
 from dataclasses import dataclass, field
 from enum import Enum, Flag, auto
 from typing import (
     Any,
 )
-
 from .flow_sensitive import (
     BasicBlock,
     CFGBuilder,
     ControlFlowGraph,
     DataFlowAnalysis,
 )
-
-
 class TaintKind(Flag):
     """Categories of taint for security analysis."""
-
     NONE = 0
     USER_INPUT = auto()
     NETWORK = auto()
@@ -42,11 +36,8 @@ class TaintKind(Flag):
     UNTRUSTED = USER_INPUT | NETWORK | EXTERNAL_API
     EXTERNAL = FILE | DATABASE | ENVIRONMENT | COMMAND_LINE
     ANY_SOURCE = UNTRUSTED | EXTERNAL
-
-
 class SinkKind(Enum):
     """Categories of sensitive sinks."""
-
     EVAL = auto()
     IMPORT = auto()
     CODE_EXEC = auto()
@@ -63,20 +54,16 @@ class SinkKind(Enum):
     LOG = auto()
     PRINT = auto()
     DESERIALIZE = auto()
-
-
 @dataclass(frozen=True)
 class TaintLabel:
     """
     A label describing the taint status of a value.
     Tracks the source and path of tainted data.
     """
-
     kind: TaintKind
     source: str | None = None
     source_line: int | None = None
     path: tuple[str, ...] = ()
-
     def propagate(self, operation: str) -> TaintLabel:
         """Create new label with operation added to path."""
         return TaintLabel(
@@ -85,7 +72,6 @@ class TaintLabel:
             source_line=self.source_line,
             path=self.path + (operation,),
         )
-
     def merge_with(self, other: TaintLabel) -> TaintLabel:
         """Merge two taint labels."""
         return TaintLabel(
@@ -94,40 +80,31 @@ class TaintLabel:
             source_line=self.source_line or other.source_line,
             path=self.path if len(self.path) >= len(other.path) else other.path,
         )
-
     @property
     def is_tainted(self) -> bool:
         """Check if this label indicates tainted data."""
         return self.kind != TaintKind.NONE
-
     @property
     def is_untrusted(self) -> bool:
         """Check if taint is from untrusted source."""
         return bool(self.kind & TaintKind.UNTRUSTED)
-
-
 @dataclass
 class TaintedValue:
     """A value with its taint information."""
-
     value_name: str
     labels: set[TaintLabel] = field(default_factory=set)
     confidence: float = 1.0
-
     def add_label(self, label: TaintLabel) -> None:
         """Add a taint label."""
         self.labels.add(label)
-
     def merge_labels(self, other: TaintedValue) -> None:
         """Merge labels from another tainted value."""
         for label in other.labels:
             self.labels.add(label)
-
     @property
     def is_tainted(self) -> bool:
         """Check if value has any taint."""
         return any(label.is_tainted for label in self.labels)
-
     @property
     def taint_kinds(self) -> TaintKind:
         """Get combined taint kinds."""
@@ -135,43 +112,31 @@ class TaintedValue:
         for label in self.labels:
             result |= label.kind
         return result
-
-
 @dataclass
 class TaintSource:
     """Definition of a taint source."""
-
     name: str
     kind: TaintKind
     arg_indices: set[int] = field(default_factory=set)
     return_tainted: bool = True
     description: str = ""
-
-
 @dataclass
 class TaintSink:
     """Definition of a sensitive sink."""
-
     name: str
     kind: SinkKind
     arg_indices: set[int] = field(default_factory=set)
     description: str = ""
     severity: str = "high"
-
-
 @dataclass
 class Sanitizer:
     """Definition of a sanitizer that removes/reduces taint."""
-
     name: str
     removes_kinds: TaintKind
     sanitizes_arg: int = 0
     description: str = ""
-
-
 class TaintDefinitions:
     """Pre-defined sources, sinks, and sanitizers."""
-
     SOURCES: list[TaintSource] = [
         TaintSource("input", TaintKind.USER_INPUT, description="User keyboard input"),
         TaintSource(
@@ -307,17 +272,13 @@ class TaintDefinitions:
         Sanitizer("realpath", TaintKind.USER_INPUT, description="Real path"),
         Sanitizer("abspath", TaintKind.USER_INPUT, description="Absolute path"),
     ]
-
-
 @dataclass
 class TaintState:
     """
     Tracks taint status of all values at a program point.
     """
-
     variables: dict[str, TaintedValue] = field(default_factory=dict)
     stack: list[TaintedValue] = field(default_factory=list)
-
     def copy(self) -> TaintState:
         """Create a copy of this state."""
         new_state = TaintState()
@@ -329,40 +290,33 @@ class TaintState:
             TaintedValue(v.value_name, set(v.labels), v.confidence) for v in self.stack
         ]
         return new_state
-
     def get_taint(self, var_name: str) -> TaintedValue:
         """Get taint info for a variable."""
         if var_name not in self.variables:
             self.variables[var_name] = TaintedValue(var_name)
         return self.variables[var_name]
-
     def set_taint(self, var_name: str, tainted: TaintedValue) -> None:
         """Set taint info for a variable."""
         self.variables[var_name] = tainted
-
     def is_tainted(self, var_name: str) -> bool:
         """Check if a variable is tainted."""
         if var_name in self.variables:
             return self.variables[var_name].is_tainted
         return False
-
     def push(self, tainted: TaintedValue) -> None:
         """Push tainted value onto stack."""
         self.stack.append(tainted)
-
     def pop(self) -> TaintedValue:
         """Pop tainted value from stack."""
         if self.stack:
             return self.stack.pop()
         return TaintedValue("_unknown")
-
     def peek(self, depth: int = 0) -> TaintedValue | None:
         """Peek at stack value."""
         idx = -(depth + 1)
         if abs(idx) <= len(self.stack):
             return self.stack[idx]
         return None
-
     def merge_with(self, other: TaintState) -> TaintState:
         """Merge two taint states (for control flow merge)."""
         result = TaintState()
@@ -384,17 +338,13 @@ class TaintState:
                     var, set(other_taint.labels), other_taint.confidence
                 )
         return result
-
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TaintState):
             return False
         return self.variables == other.variables
-
-
 @dataclass
 class TaintViolation:
     """A detected taint flow from source to sink."""
-
     source: TaintLabel
     sink: TaintSink
     sink_line: int
@@ -402,7 +352,6 @@ class TaintViolation:
     file: str
     variable_name: str
     path_description: str
-
     def format(self) -> str:
         """Format the violation for display."""
         source_desc = self.source.source or "unknown source"
@@ -412,21 +361,17 @@ class TaintViolation:
             f"  reaches {self.sink.name} at line {self.sink_line}\n"
             f"  via: {' -> '.join(self.source.path) or 'direct'}"
         )
-
-
 class TaintAnalyzer:
     """
     Analyzes bytecode for taint flow violations.
     Tracks how tainted data flows through the program and
     reports when it reaches sensitive sinks.
     """
-
     def __init__(self) -> None:
         self.sources = {s.name: s for s in TaintDefinitions.SOURCES}
         self.sinks = {s.name: s for s in TaintDefinitions.SINKS}
         self.sanitizers = {s.name: s for s in TaintDefinitions.SANITIZERS}
         self.violations: list[TaintViolation] = []
-
     def analyze_function(
         self,
         code: Any,
@@ -444,7 +389,6 @@ class TaintAnalyzer:
                 current_line = instr.starts_line
             self._process_instruction(instr, state, current_line, file_path)
         return self.violations
-
     def _process_instruction(
         self,
         instr: dis.Instruction,
@@ -557,7 +501,6 @@ class TaintAnalyzer:
                 state.push(b)
         elif opname == "RETURN_VALUE":
             pass
-
     def _handle_call(
         self,
         instr: dis.Instruction,
@@ -619,7 +562,6 @@ class TaintAnalyzer:
         for label in func_taint.labels:
             result.add_label(label.propagate(f"call:{func_name}"))
         state.push(result)
-
     def _find_source(self, name: str) -> TaintSource | None:
         """Find a taint source by name."""
         if name in self.sources:
@@ -628,7 +570,6 @@ class TaintAnalyzer:
         if base_name in self.sources:
             return self.sources[base_name]
         return None
-
     def _find_sink(self, name: str) -> TaintSink | None:
         """Find a taint sink by name."""
         if name in self.sinks:
@@ -637,7 +578,6 @@ class TaintAnalyzer:
         if base_name in self.sinks:
             return self.sinks[base_name]
         return None
-
     def _find_sanitizer(self, name: str) -> Sanitizer | None:
         """Find a sanitizer by name."""
         if name in self.sanitizers:
@@ -646,25 +586,19 @@ class TaintAnalyzer:
         if base_name in self.sanitizers:
             return self.sanitizers[base_name]
         return None
-
     def add_source(self, source: TaintSource) -> None:
         """Add a custom taint source."""
         self.sources[source.name] = source
-
     def add_sink(self, sink: TaintSink) -> None:
         """Add a custom taint sink."""
         self.sinks[sink.name] = sink
-
     def add_sanitizer(self, sanitizer: Sanitizer) -> None:
         """Add a custom sanitizer."""
         self.sanitizers[sanitizer.name] = sanitizer
-
-
 class TaintFlowAnalysis(DataFlowAnalysis[TaintState]):
     """
     Flow-sensitive taint analysis using the data flow framework.
     """
-
     def __init__(
         self,
         cfg: ControlFlowGraph,
@@ -674,13 +608,10 @@ class TaintFlowAnalysis(DataFlowAnalysis[TaintState]):
         super().__init__(cfg)
         self.analyzer = analyzer
         self.file_path = file_path
-
     def initial_value(self) -> TaintState:
         return TaintState()
-
     def boundary_value(self) -> TaintState:
         return TaintState()
-
     def transfer(self, block: BasicBlock, in_fact: TaintState) -> TaintState:
         """Transfer function: process block for taint."""
         state = in_fact.copy()
@@ -690,7 +621,6 @@ class TaintFlowAnalysis(DataFlowAnalysis[TaintState]):
                 current_line = instr.starts_line
             self.analyzer._process_instruction(instr, state, current_line, self.file_path)
         return state
-
     def meet(self, facts: list[TaintState]) -> TaintState:
         """Merge taint states from multiple paths."""
         if not facts:
@@ -699,16 +629,12 @@ class TaintFlowAnalysis(DataFlowAnalysis[TaintState]):
         for state in facts[1:]:
             result = result.merge_with(state)
         return result
-
-
 class TaintChecker:
     """
     High-level interface for taint checking.
     """
-
     def __init__(self) -> None:
         self.analyzer = TaintAnalyzer()
-
     def check_function(
         self,
         code: Any,
@@ -716,7 +642,6 @@ class TaintChecker:
     ) -> list[TaintViolation]:
         """Check a function for taint violations."""
         return self.analyzer.analyze_function(code, file_path)
-
     def check_flow_sensitive(
         self,
         code: Any,
@@ -728,17 +653,14 @@ class TaintChecker:
         analysis = TaintFlowAnalysis(cfg, self.analyzer, file_path)
         analysis.analyze()
         return self.analyzer.violations
-
     def add_source(self, name: str, kind: TaintKind, description: str = "") -> None:
         """Add a custom taint source."""
         self.analyzer.add_source(TaintSource(name, kind, description=description))
-
     def add_sink(
         self, name: str, kind: SinkKind, arg_indices: set[int], description: str = ""
     ) -> None:
         """Add a custom taint sink."""
         self.analyzer.add_sink(TaintSink(name, kind, arg_indices, description=description))
-
     def add_sanitizer(self, name: str, removes_kinds: TaintKind, description: str = "") -> None:
         """Add a custom sanitizer."""
         self.analyzer.add_sanitizer(Sanitizer(name, removes_kinds, description=description))

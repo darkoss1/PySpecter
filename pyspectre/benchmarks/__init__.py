@@ -1,7 +1,6 @@
 """Benchmark package for PySpectre.
 Provides performance benchmarking, regression testing, and profiling.
 """
-
 from pyspectre.benchmarks.suite import (
     Benchmark,
     BenchmarkCategory,
@@ -14,7 +13,6 @@ from pyspectre.benchmarks.suite import (
     create_builtin_benchmarks,
     run_benchmarks,
 )
-
 __all__ = [
     "BenchmarkCategory",
     "BenchmarkResult",

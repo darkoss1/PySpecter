@@ -1,25 +1,19 @@
 """Configuration system for PySpectre.
 Supports TOML configuration files with project-level and user-level settings.
 """
-
 from __future__ import annotations
-
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
 CONFIG_FILES = [
     "pyspectre.toml",
     ".pyspectre.toml",
     "pyproject.toml",
 ]
-
-
 @dataclass
 class DetectorConfig:
     """Configuration for bug detectors."""
-
     division_by_zero: bool = True
     assertion_errors: bool = True
     index_errors: bool = True
@@ -31,7 +25,6 @@ class DetectorConfig:
     taint_enabled: bool = False
     taint_sources: list[str] = field(default_factory=lambda: ["input", "request"])
     taint_sinks: list[str] = field(default_factory=lambda: ["exec", "eval", "sql"])
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -47,12 +40,9 @@ class DetectorConfig:
             "taint_sources": self.taint_sources,
             "taint_sinks": self.taint_sinks,
         }
-
-
 @dataclass
 class ResourceLimits:
     """Resource limits for analysis."""
-
     max_paths: int = 1000
     max_depth: int = 100
     max_iterations: int = 10000
@@ -61,7 +51,6 @@ class ResourceLimits:
     max_constraint_size: int = 10000
     max_string_length: int = 1000
     max_list_length: int = 100
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -74,12 +63,9 @@ class ResourceLimits:
             "max_string_length": self.max_string_length,
             "max_list_length": self.max_list_length,
         }
-
-
 @dataclass
 class OutputConfig:
     """Configuration for output and reporting."""
-
     format: str = "text"
     output_dir: str | None = None
     color: bool = True
@@ -88,7 +74,6 @@ class OutputConfig:
     show_paths: bool = True
     show_constraints: bool = False
     show_timing: bool = True
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -101,12 +86,9 @@ class OutputConfig:
             "show_constraints": self.show_constraints,
             "show_timing": self.show_timing,
         }
-
-
 @dataclass
 class AnalysisConfig:
     """Configuration for analysis behavior."""
-
     strategy: str = "dfs"
     loop_unroll_limit: int = 10
     array_size_limit: int = 50
@@ -124,7 +106,6 @@ class AnalysisConfig:
             "**/node_modules/**",
         ]
     )
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -137,17 +118,13 @@ class AnalysisConfig:
             "include_patterns": self.include_patterns,
             "exclude_patterns": self.exclude_patterns,
         }
-
-
 @dataclass
 class PluginConfig:
     """Configuration for plugins."""
-
     enabled: bool = True
     plugin_dirs: list[str] = field(default_factory=list)
     disabled_plugins: set[str] = field(default_factory=set)
     plugin_settings: dict[str, dict[str, Any]] = field(default_factory=dict)
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -156,12 +133,9 @@ class PluginConfig:
             "disabled_plugins": list(self.disabled_plugins),
             "plugin_settings": self.plugin_settings,
         }
-
-
 @dataclass
 class PySpectreConfig:
     """Main configuration for PySpectre."""
-
     detectors: DetectorConfig = field(default_factory=DetectorConfig)
     limits: ResourceLimits = field(default_factory=ResourceLimits)
     output: OutputConfig = field(default_factory=OutputConfig)
@@ -169,7 +143,6 @@ class PySpectreConfig:
     plugins: PluginConfig = field(default_factory=PluginConfig)
     project_root: Path | None = None
     config_file: Path | None = None
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
@@ -179,7 +152,6 @@ class PySpectreConfig:
             "analysis": self.analysis.to_dict(),
             "plugins": self.plugins.to_dict(),
         }
-
     def to_toml(self) -> str:
         """Generate TOML configuration string."""
         lines = ["[tool.pyspectre]", ""]
@@ -220,8 +192,6 @@ class PySpectreConfig:
             else:
                 lines.append(f"{key} = {value}")
         return "\n".join(lines)
-
-
 def find_config_file(start_dir: Path | None = None) -> Path | None:
     """Find configuration file by walking up directory tree."""
     if start_dir is None:
@@ -239,8 +209,6 @@ def find_config_file(start_dir: Path | None = None) -> Path | None:
         if config_path.exists():
             return config_path
     return None
-
-
 def load_config(
     config_path: Path | None = None,
     start_dir: Path | None = None,
@@ -271,8 +239,6 @@ def load_config(
         shadow_data = data.get("tool", {}).get("pyspectre", data)
     _apply_config(config, shadow_data)
     return config
-
-
 def _apply_config(config: PySpectreConfig, data: dict[str, Any]) -> None:
     """Apply configuration data to config object."""
     if "detectors" in data:
@@ -348,14 +314,10 @@ def _apply_config(config: PySpectreConfig, data: dict[str, Any]) -> None:
             config.plugins.disabled_plugins = set(plug_data["disabled_plugins"])
         if "plugin_settings" in plug_data:
             config.plugins.plugin_settings = dict(plug_data["plugin_settings"])
-
-
 def generate_default_config() -> str:
     """Generate default configuration file content."""
     config = PySpectreConfig()
     return config.to_toml()
-
-
 def init_config(directory: Path | None = None) -> Path:
     """Initialize a new configuration file in the given directory.
     Args:
@@ -371,8 +333,6 @@ def init_config(directory: Path | None = None) -> Path:
     content = generate_default_config()
     config_path.write_text(content, encoding="utf-8")
     return config_path
-
-
 __all__ = [
     "PySpectreConfig",
     "DetectorConfig",

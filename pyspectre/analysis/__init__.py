@@ -24,7 +24,6 @@ NEW (v2.0):
 - Cross-function analysis (call graphs, effects)
 - Value range analysis
 """
-
 from pyspectre.analysis.abstract_domains import (
     AbstractInterpreter,
     AbstractState,
@@ -237,7 +236,6 @@ from pyspectre.analysis.type_constraints import (
 )
 from pyspectre.analysis.type_inference import TypeAnalyzer
 from pyspectre.analysis.type_stubs import StubRepository
-
 __all__ = [
     "Issue",
     "IssueKind",

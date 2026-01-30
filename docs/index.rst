@@ -1,7 +1,7 @@
-Shadow VM Documentation
+PySpectre Documentation
 ========================
 
-**Shadow VM** is a symbolic execution engine for Python bytecode using Z3.
+**PySpectre** is a symbolic execution engine for Python bytecode using Z3.
 It analyzes Python functions to find potential runtime errors like division
 by zero, assertion failures, and index errors.
 
@@ -21,7 +21,7 @@ Quick Example
 
 .. code-block:: python
 
-   from shadow_vm import analyze
+   from pyspectre import analyze
 
    def divide(x, y):
        return x / y
@@ -41,7 +41,7 @@ Features
 - **Z3 Integration**: Uses SMT solving for constraint reasoning
 - **Bug Detection**: Division by zero, assertions, index errors, and more
 - **Path Strategies**: DFS, BFS, coverage-guided exploration
-- **Multiple Outputs**: Text, JSON, HTML, Markdown formatters
+- **Multiple Outputs**: Text, JSON, HTML, Markdown, SARIF formatters
 - **CLI Tool**: Command-line interface for easy integration
 - **Type-Safe**: Full type annotations with py.typed marker
 
@@ -51,7 +51,7 @@ Installation
 
 .. code-block:: bash
 
-   pip install shadow-vm
+   pip install pyspectre
 
 
 Indices and tables

@@ -50,7 +50,7 @@ dev = [
 
 [project.scripts]
 pyspectre = "pyspectre.cli:main"
-pyspectre-verify = "pyspectre_verify:main"
+pyspectre-verify = "pyspectre.verify_cli:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/pyspectre"

@@ -11,68 +11,49 @@ This module provides:
 Classes and objects need special handling in symbolic execution
 because attributes can be added dynamically.
 """
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import (
     Any,
 )
-
 import z3
-
-
 class ObjectId:
     """
     Unique identifier for symbolic objects.
     Used to track object identity in the symbolic heap.
     """
-
     _counter: int = 0
-
     def __init__(self, name: str | None = None):
         ObjectId._counter += 1
         self._id = ObjectId._counter
         self._name = name or f"obj_{self._id}"
         self._z3_id = z3.Int(f"id_{self._name}")
-
     @property
     def id(self) -> int:
         return self._id
-
     @property
     def name(self) -> str:
         return self._name
-
     def to_z3(self) -> z3.ArithRef:
         """Get Z3 representation for identity comparisons."""
         return self._z3_id
-
     def __eq__(self, other: object) -> bool:
         if isinstance(other, ObjectId):
             return self._id == other._id
         return False
-
     def __hash__(self) -> int:
         return hash(self._id)
-
     def __str__(self) -> str:
         return self._name
-
     def __repr__(self) -> str:
         return f"ObjectId({self._name})"
-
-
 class AttributeState(Enum):
     """State of an object attribute."""
-
     CONCRETE = auto()
     SYMBOLIC = auto()
     DELETED = auto()
     UNKNOWN = auto()
-
-
 @dataclass
 class SymbolicAttribute:
     """
@@ -83,7 +64,6 @@ class SymbolicAttribute:
     - Deleted: Was deleted
     - Unknown: May or may not exist
     """
-
     name: str
     value: Any
     state: AttributeState = AttributeState.CONCRETE
@@ -91,32 +71,25 @@ class SymbolicAttribute:
     is_class_attr: bool = False
     is_method: bool = False
     is_property: bool = False
-
     @classmethod
     def concrete(cls, name: str, value: Any) -> SymbolicAttribute:
         """Create a concrete attribute."""
         return cls(name=name, value=value, state=AttributeState.CONCRETE)
-
     @classmethod
     def symbolic(cls, name: str, value: Any) -> SymbolicAttribute:
         """Create a symbolic attribute."""
         return cls(name=name, value=value, state=AttributeState.SYMBOLIC)
-
     @classmethod
     def deleted(cls, name: str) -> SymbolicAttribute:
         """Create a deleted attribute marker."""
         return cls(name=name, value=None, state=AttributeState.DELETED)
-
     @classmethod
     def unknown(cls, name: str) -> SymbolicAttribute:
         """Create an unknown attribute marker."""
         return cls(name=name, value=None, state=AttributeState.UNKNOWN)
-
     def is_present(self) -> bool:
         """Check if attribute is present (not deleted/unknown)."""
         return self.state in (AttributeState.CONCRETE, AttributeState.SYMBOLIC)
-
-
 @dataclass
 class SymbolicClass:
     """
@@ -127,7 +100,6 @@ class SymbolicClass:
     - Class attributes and methods
     - Metaclass
     """
-
     name: str
     qualname: str = ""
     bases: tuple[SymbolicClass, ...] = ()
@@ -135,58 +107,45 @@ class SymbolicClass:
     attributes: dict[str, SymbolicAttribute] = field(default_factory=dict)
     _mro: tuple[SymbolicClass, ...] | None = None
     _id: ObjectId | None = None
-
     def __post_init__(self):
         if not self.qualname:
             self.qualname = self.name
         if self._id is None:
             self._id = ObjectId(f"class_{self.name}")
-
     @property
     def id(self) -> ObjectId:
         return self._id
-
     @property
     def mro(self) -> tuple[SymbolicClass, ...]:
         """Compute or return cached Method Resolution Order."""
         if self._mro is None:
             self._mro = self._compute_mro()
         return self._mro
-
     def _compute_mro(self) -> tuple[SymbolicClass, ...]:
         """Compute MRO using C3 linearization."""
         return compute_mro(self)
-
     def get_attribute(self, name: str) -> SymbolicAttribute | None:
         """Get a class attribute."""
         return self.attributes.get(name)
-
     def set_attribute(self, name: str, value: Any) -> None:
         """Set a class attribute."""
         self.attributes[name] = SymbolicAttribute.concrete(name, value)
-
     def has_attribute(self, name: str) -> bool:
         """Check if class has attribute."""
         return name in self.attributes and self.attributes[name].is_present()
-
     def lookup_attribute(self, name: str) -> SymbolicAttribute | None:
         """Lookup attribute through MRO."""
         for cls in self.mro:
             if cls.has_attribute(name):
                 return cls.get_attribute(name)
         return None
-
     def is_subclass_of(self, other: SymbolicClass) -> bool:
         """Check if this class is a subclass of other."""
         return other in self.mro
-
     def __str__(self) -> str:
         return f"<class '{self.qualname}'>"
-
     def __repr__(self) -> str:
         return f"SymbolicClass({self.name!r})"
-
-
 def compute_mro(cls: SymbolicClass) -> tuple[SymbolicClass, ...]:
     """
     Compute Method Resolution Order using C3 linearization.
@@ -197,7 +156,6 @@ def compute_mro(cls: SymbolicClass) -> tuple[SymbolicClass, ...]:
     """
     if not cls.bases:
         return (cls,)
-
     def merge(seqs: list[list[SymbolicClass]]) -> list[SymbolicClass]:
         result = []
         while True:
@@ -216,13 +174,10 @@ def compute_mro(cls: SymbolicClass) -> tuple[SymbolicClass, ...]:
             else:
                 raise TypeError(f"Cannot create consistent MRO for {cls.name}")
         return result
-
     parent_mros = [list(base.mro) for base in cls.bases]
     parent_list = list(cls.bases)
     mro = merge([list([cls])] + parent_mros + [parent_list])
     return tuple(mro)
-
-
 @dataclass
 class SymbolicObject:
     """
@@ -233,20 +188,16 @@ class SymbolicObject:
     - Object identity
     - Slot values (if __slots__ defined)
     """
-
     cls: SymbolicClass
     attributes: dict[str, SymbolicAttribute] = field(default_factory=dict)
     _id: ObjectId | None = None
     slots: tuple[str, ...] | None = None
-
     def __post_init__(self):
         if self._id is None:
             self._id = ObjectId(f"inst_{self.cls.name}")
-
     @property
     def id(self) -> ObjectId:
         return self._id
-
     def get_attribute(
         self,
         name: str,
@@ -269,40 +220,31 @@ class SymbolicObject:
         if check_class:
             return self.cls.lookup_attribute(name)
         return None
-
     def set_attribute(self, name: str, value: Any) -> None:
         """Set an instance attribute."""
         if self.slots is not None and name not in self.slots:
             pass
         self.attributes[name] = SymbolicAttribute.concrete(name, value)
-
     def delete_attribute(self, name: str) -> bool:
         """Delete an instance attribute."""
         if name in self.attributes:
             self.attributes[name] = SymbolicAttribute.deleted(name)
             return True
         return False
-
     def has_attribute(self, name: str, check_class: bool = True) -> bool:
         """Check if object has attribute."""
         attr = self.get_attribute(name, check_class)
         return attr is not None and attr.is_present()
-
     def get_class(self) -> SymbolicClass:
         """Get the object's class."""
         return self.cls
-
     def isinstance_of(self, other_cls: SymbolicClass) -> bool:
         """Check if object is instance of class."""
         return self.cls.is_subclass_of(other_cls)
-
     def __str__(self) -> str:
         return f"<{self.cls.qualname} object at {self._id}>"
-
     def __repr__(self) -> str:
         return f"SymbolicObject({self.cls.name!r}, {self._id})"
-
-
 @dataclass
 class SymbolicMethod:
     """
@@ -311,23 +253,18 @@ class SymbolicMethod:
     - Unbound: function accessed on class
     - Bound: function accessed on instance (has __self__)
     """
-
     func: Any
     instance: SymbolicObject | None = None
     owner: SymbolicClass | None = None
-
     @property
     def is_bound(self) -> bool:
         return self.instance is not None
-
     @property
     def __self__(self) -> SymbolicObject | None:
         return self.instance
-
     @property
     def __func__(self) -> Any:
         return self.func
-
     def bind(self, instance: SymbolicObject) -> SymbolicMethod:
         """Create a bound method."""
         return SymbolicMethod(
@@ -335,26 +272,21 @@ class SymbolicMethod:
             instance=instance,
             owner=self.owner or instance.cls,
         )
-
     def __str__(self) -> str:
         if self.is_bound:
             return f"<bound method {self.func} of {self.instance}>"
         return f"<function {self.func}>"
-
-
 @dataclass
 class SymbolicProperty:
     """
     Represents a property descriptor.
     Properties are data descriptors with optional getter, setter, deleter.
     """
-
     fget: Any | None = None
     fset: Any | None = None
     fdel: Any | None = None
     doc: str | None = None
     name: str = ""
-
     def __get__(
         self,
         obj: SymbolicObject | None,
@@ -366,45 +298,35 @@ class SymbolicProperty:
         if self.fget is None:
             raise AttributeError(f"property '{self.name}' has no getter")
         return self.fget
-
     def __set__(self, obj: SymbolicObject, value: Any) -> None:
         """Set property value."""
         if self.fset is None:
             raise AttributeError(f"property '{self.name}' has no setter")
-
     def __delete__(self, obj: SymbolicObject) -> None:
         """Delete property."""
         if self.fdel is None:
             raise AttributeError(f"property '{self.name}' has no deleter")
-
     def getter(self, fget: Any) -> SymbolicProperty:
         """Return property with new getter."""
         return SymbolicProperty(fget, self.fset, self.fdel, self.doc, self.name)
-
     def setter(self, fset: Any) -> SymbolicProperty:
         """Return property with new setter."""
         return SymbolicProperty(self.fget, fset, self.fdel, self.doc, self.name)
-
     def deleter(self, fdel: Any) -> SymbolicProperty:
         """Return property with new deleter."""
         return SymbolicProperty(self.fget, self.fset, fdel, self.doc, self.name)
-
-
 @dataclass
 class SymbolicSuper:
     """
     Represents super() for method resolution.
     super() returns a proxy that delegates to a parent class.
     """
-
     type_: SymbolicClass
     obj: SymbolicObject | None = None
     obj_type: SymbolicClass | None = None
-
     def __post_init__(self):
         if self.obj is not None and self.obj_type is None:
             self.obj_type = self.obj.cls
-
     def get_attribute(self, name: str) -> SymbolicAttribute | None:
         """
         Get attribute from parent class.
@@ -429,8 +351,6 @@ class SymbolicSuper:
             if cls == self.type_:
                 found = True
         return None
-
-
 OBJECT_CLASS = SymbolicClass(name="object", qualname="object")
 TYPE_CLASS = SymbolicClass(name="type", qualname="type", bases=(OBJECT_CLASS,))
 TYPE_CLASS.metaclass = TYPE_CLASS
@@ -463,13 +383,9 @@ BUILTIN_CLASSES: dict[str, SymbolicClass] = {
     "NoneType": NONETYPE_CLASS,
     "function": FUNCTION_CLASS,
 }
-
-
 def get_builtin_class(name: str) -> SymbolicClass | None:
     """Get a built-in class by name."""
     return BUILTIN_CLASSES.get(name)
-
-
 def get_class_for_value(value: Any) -> SymbolicClass:
     """Get the SymbolicClass for a Python value."""
     if value is None:
@@ -497,8 +413,6 @@ def get_class_for_value(value: Any) -> SymbolicClass:
     if callable(value):
         return FUNCTION_CLASS
     return OBJECT_CLASS
-
-
 @dataclass
 class ObjectState:
     """
@@ -508,14 +422,11 @@ class ObjectState:
     - Object-class relationships
     - Identity comparisons
     """
-
     objects: dict[ObjectId, SymbolicObject] = field(default_factory=dict)
     classes: dict[str, SymbolicClass] = field(default_factory=dict)
-
     def __post_init__(self):
         for name, cls in BUILTIN_CLASSES.items():
             self.classes[name] = cls
-
     def create_object(
         self,
         cls: SymbolicClass,
@@ -527,7 +438,6 @@ class ObjectState:
             obj._id = ObjectId(name)
         self.objects[obj.id] = obj
         return obj
-
     def create_class(
         self,
         name: str,
@@ -540,15 +450,12 @@ class ObjectState:
         cls = SymbolicClass(name=name, qualname=qualname or name, bases=bases)
         self.classes[name] = cls
         return cls
-
     def get_object(self, obj_id: ObjectId) -> SymbolicObject | None:
         """Get an object by ID."""
         return self.objects.get(obj_id)
-
     def get_class(self, name: str) -> SymbolicClass | None:
         """Get a class by name."""
         return self.classes.get(name)
-
     def isinstance_check(
         self,
         obj: SymbolicObject,
@@ -558,7 +465,6 @@ class ObjectState:
         if obj.isinstance_of(cls):
             return z3.BoolVal(True)
         return z3.BoolVal(False)
-
     def identity_equal(
         self,
         obj1: SymbolicObject,
@@ -566,15 +472,12 @@ class ObjectState:
     ) -> z3.BoolRef:
         """Generate Z3 constraint for identity comparison (is)."""
         return obj1.id.to_z3() == obj2.id.to_z3()
-
     def clone(self) -> ObjectState:
         """Create a shallow copy of object state."""
         state = ObjectState()
         state.objects = dict(self.objects)
         state.classes = dict(self.classes)
         return state
-
-
 def getattr_symbolic(
     obj: SymbolicObject,
     name: str,
@@ -597,8 +500,6 @@ def getattr_symbolic(
             return value, True
         return SymbolicMethod(value, obj, obj.cls), True
     return value, True
-
-
 def setattr_symbolic(
     obj: SymbolicObject,
     name: str,
@@ -616,8 +517,6 @@ def setattr_symbolic(
             return True
     obj.set_attribute(name, value)
     return True
-
-
 def delattr_symbolic(
     obj: SymbolicObject,
     name: str,
@@ -633,8 +532,6 @@ def delattr_symbolic(
             prop.__delete__(obj)
             return True
     return obj.delete_attribute(name)
-
-
 def hasattr_symbolic(
     obj: SymbolicObject,
     name: str,
@@ -646,8 +543,6 @@ def hasattr_symbolic(
     if obj.has_attribute(name):
         return z3.BoolVal(True)
     return z3.BoolVal(False)
-
-
 def isinstance_symbolic(
     obj: SymbolicObject,
     classinfo: SymbolicClass | tuple[SymbolicClass, ...],
@@ -661,8 +556,6 @@ def isinstance_symbolic(
         if obj.isinstance_of(cls):
             return z3.BoolVal(True)
     return z3.BoolVal(False)
-
-
 def issubclass_symbolic(
     cls: SymbolicClass,
     classinfo: SymbolicClass | tuple[SymbolicClass, ...],
@@ -676,13 +569,9 @@ def issubclass_symbolic(
         if cls.is_subclass_of(parent):
             return z3.BoolVal(True)
     return z3.BoolVal(False)
-
-
 def type_of(obj: SymbolicObject) -> SymbolicClass:
     """Get the type (class) of an object."""
     return obj.cls
-
-
 def create_instance(
     cls: SymbolicClass,
     state: ObjectState,
@@ -699,8 +588,6 @@ def create_instance(
         for name, value in init_attrs.items():
             obj.set_attribute(name, value)
     return obj
-
-
 def call_method(
     obj: SymbolicObject,
     method_name: str,

@@ -8,47 +8,33 @@ for mathematical proofs of correctness. Covers:
 - Wrapping vs saturating arithmetic
 - Arbitrary precision integer bounds
 """
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
-
 import z3
-
 from pyspectre.core.solver import get_model, is_satisfiable
-
-
 class ArithmeticMode(Enum):
     """How arithmetic operations handle overflow."""
-
     WRAPPING = auto()
     SATURATING = auto()
     CHECKED = auto()
     ARBITRARY = auto()
-
-
 class IntegerWidth(Enum):
     """Standard integer bit widths."""
-
     INT8 = 8
     INT16 = 16
     INT32 = 32
     INT64 = 64
     INT128 = 128
     ARBITRARY = 0
-
-
 @dataclass
 class IntegerBounds:
     """Bounds for an integer type."""
-
     width: IntegerWidth
     signed: bool
     min_val: int
     max_val: int
-
     @classmethod
     def for_width(cls, width: IntegerWidth, signed: bool = True) -> IntegerBounds:
         """Create bounds for a specific bit width."""
@@ -59,19 +45,14 @@ class IntegerBounds:
             return cls(width, signed, -(2 ** (bits - 1)), 2 ** (bits - 1) - 1)
         else:
             return cls(width, signed, 0, 2**bits - 1)
-
     def contains(self, value: int) -> bool:
         """Check if value is within bounds."""
         return self.min_val <= value <= self.max_val
-
     def to_z3_constraints(self, var: z3.ArithRef) -> list[z3.BoolRef]:
         """Generate Z3 constraints for these bounds."""
         return [var >= self.min_val, var <= self.max_val]
-
-
 class ArithmeticIssueKind(Enum):
     """Types of arithmetic safety issues."""
-
     SIGNED_OVERFLOW = auto()
     SIGNED_UNDERFLOW = auto()
     UNSIGNED_OVERFLOW = auto()
@@ -89,12 +70,9 @@ class ArithmeticIssueKind(Enum):
     SIGN_LOSS = auto()
     POWER_OVERFLOW = auto()
     ABS_OVERFLOW = auto()
-
-
 @dataclass
 class ArithmeticIssue:
     """Represents a detected arithmetic safety issue."""
-
     kind: ArithmeticIssueKind
     message: str
     location: str | None = None
@@ -102,7 +80,6 @@ class ArithmeticIssue:
     constraints: list[Any] = field(default_factory=list)
     counterexample: dict[str, Any] = field(default_factory=dict)
     severity: str = "error"
-
     def format(self) -> str:
         """Format issue for display."""
         loc = f" at line {self.line_number}" if self.line_number else ""
@@ -112,15 +89,12 @@ class ArithmeticIssue:
                 f"{k}={v}" for k, v in self.counterexample.items()
             )
         return f"[{self.kind.name}]{loc}: {self.message}{ce}"
-
-
 class ArithmeticSafetyAnalyzer:
     """
     Comprehensive arithmetic safety analyzer using Z3.
     Provides mathematically proven detection of arithmetic issues
     across multiple integer widths and modes.
     """
-
     def __init__(
         self,
         mode: ArithmeticMode = ArithmeticMode.CHECKED,
@@ -136,12 +110,10 @@ class ArithmeticSafetyAnalyzer:
         self._solver = z3.Solver()
         self._solver.set("timeout", timeout_ms)
         self._issues: list[ArithmeticIssue] = []
-
     def reset(self) -> None:
         """Reset analyzer state."""
         self._solver.reset()
         self._issues.clear()
-
     def check_addition_overflow(
         self,
         a: z3.ArithRef,
@@ -186,7 +158,6 @@ class ArithmeticSafetyAnalyzer:
                     counterexample=self._extract_model(model, [a, b]),
                 )
         return None
-
     def check_subtraction_overflow(
         self,
         a: z3.ArithRef,
@@ -226,7 +197,6 @@ class ArithmeticSafetyAnalyzer:
                     counterexample=self._extract_model(model, [a, b]),
                 )
         return None
-
     def check_multiplication_overflow(
         self,
         a: z3.ArithRef,
@@ -250,7 +220,6 @@ class ArithmeticSafetyAnalyzer:
                 counterexample=self._extract_model(model, [a, b]),
             )
         return None
-
     def check_division_safety(
         self,
         a: z3.ArithRef,
@@ -290,7 +259,6 @@ class ArithmeticSafetyAnalyzer:
                     )
                 )
         return issues
-
     def check_modulo_safety(
         self,
         a: z3.ArithRef,
@@ -309,7 +277,6 @@ class ArithmeticSafetyAnalyzer:
                 counterexample=self._extract_model(model, [a, b]),
             )
         return None
-
     def check_shift_safety(
         self,
         value: z3.ArithRef,
@@ -349,7 +316,6 @@ class ArithmeticSafetyAnalyzer:
                 )
             )
         return issues
-
     def check_power_safety(
         self,
         base: z3.ArithRef,
@@ -388,7 +354,6 @@ class ArithmeticSafetyAnalyzer:
                     )
                 )
         return issues
-
     def check_abs_safety(
         self,
         value: z3.ArithRef,
@@ -413,7 +378,6 @@ class ArithmeticSafetyAnalyzer:
                 counterexample=self._extract_model(model, [value]),
             )
         return None
-
     def check_narrowing_conversion(
         self,
         value: z3.ArithRef,
@@ -463,7 +427,6 @@ class ArithmeticSafetyAnalyzer:
                     )
                 )
         return issues
-
     def check_float_division_safety(
         self,
         a: z3.RealRef,
@@ -496,7 +459,6 @@ class ArithmeticSafetyAnalyzer:
                 )
             )
         return issues
-
     def analyze_expression(
         self,
         expr: z3.ExprRef,
@@ -506,7 +468,6 @@ class ArithmeticSafetyAnalyzer:
         Recursively analyze an expression for all arithmetic issues.
         """
         issues = []
-
         def visit(e: z3.ExprRef) -> None:
             if z3.is_app(e):
                 decl = e.decl()
@@ -536,10 +497,8 @@ class ArithmeticSafetyAnalyzer:
                     issues.extend(self.check_power_safety(args[0], args[1], path_constraints))
                 for arg in args:
                     visit(arg)
-
         visit(expr)
         return issues
-
     def _extract_model(
         self,
         model: z3.ModelRef | None,
@@ -561,17 +520,13 @@ class ArithmeticSafetyAnalyzer:
             except Exception:
                 pass
         return result
-
-
 class SafeArithmetic:
     """
     Provides arithmetic operations that are proven safe via Z3.
     Each operation returns (result, is_safe, issue) tuple.
     """
-
     def __init__(self, analyzer: ArithmeticSafetyAnalyzer | None = None):
         self.analyzer = analyzer or ArithmeticSafetyAnalyzer()
-
     def safe_add(
         self,
         a: z3.ArithRef,
@@ -581,7 +536,6 @@ class SafeArithmetic:
         """Add with safety check."""
         issue = self.analyzer.check_addition_overflow(a, b, constraints)
         return (a + b, issue is None, issue)
-
     def safe_sub(
         self,
         a: z3.ArithRef,
@@ -591,7 +545,6 @@ class SafeArithmetic:
         """Subtract with safety check."""
         issue = self.analyzer.check_subtraction_overflow(a, b, constraints)
         return (a - b, issue is None, issue)
-
     def safe_mul(
         self,
         a: z3.ArithRef,
@@ -601,7 +554,6 @@ class SafeArithmetic:
         """Multiply with safety check."""
         issue = self.analyzer.check_multiplication_overflow(a, b, constraints)
         return (a * b, issue is None, issue)
-
     def safe_div(
         self,
         a: z3.ArithRef,
@@ -612,8 +564,6 @@ class SafeArithmetic:
         issues = self.analyzer.check_division_safety(a, b, constraints)
         result = z3.If(b != 0, a / b, z3.IntVal(0))
         return (result, len(issues) == 0, issues)
-
-
 __all__ = [
     "ArithmeticMode",
     "IntegerWidth",

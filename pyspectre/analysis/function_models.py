@@ -8,22 +8,16 @@ Features:
 - Type propagation across calls
 - Exception flow analysis
 """
-
 from __future__ import annotations
-
 import dis
 from dataclasses import dataclass, field
 from typing import (
     Any,
 )
-
 from .type_inference import PyType, TypeKind
-
-
 @dataclass
 class ParameterInfo:
     """Information about a function parameter."""
-
     name: str
     position: int
     declared_type: PyType | None = None
@@ -32,8 +26,6 @@ class ParameterInfo:
     is_mutated: bool = False
     has_default: bool = False
     default_value: Any | None = None
-
-
 @dataclass
 class FunctionSummary:
     """
@@ -44,7 +36,6 @@ class FunctionSummary:
     - Exceptions that may be raised
     - Preconditions and postconditions
     """
-
     name: str
     parameters: list[ParameterInfo] = field(default_factory=list)
     var_positional: str | None = None
@@ -61,14 +52,12 @@ class FunctionSummary:
     mutates_globals: set[str] = field(default_factory=set)
     is_analyzed: bool = False
     analysis_depth: int = 0
-
     def get_parameter(self, name: str) -> ParameterInfo | None:
         """Get parameter by name."""
         for param in self.parameters:
             if param.name == name:
                 return param
         return None
-
     def get_parameter_type(self, name: str) -> PyType | None:
         """Get type of a parameter."""
         param = self.get_parameter(name)
@@ -77,20 +66,15 @@ class FunctionSummary:
                 next(iter(param.inferred_types)) if param.inferred_types else None
             )
         return None
-
-
 class BuiltinModels:
     """Pre-defined summaries for built-in functions."""
-
     _summaries: dict[str, FunctionSummary] = {}
-
     @classmethod
     def get(cls, name: str) -> FunctionSummary | None:
         """Get summary for a built-in function."""
         if not cls._summaries:
             cls._init_summaries()
         return cls._summaries.get(name)
-
     @classmethod
     def _init_summaries(cls) -> None:
         """Initialize built-in summaries."""
@@ -630,20 +614,15 @@ class BuiltinModels:
             is_readonly=True,
             may_raise={"SyntaxError", "ValueError", "TypeError"},
         )
-
-
 class MethodModels:
     """Pre-defined models for methods of common types."""
-
     _models: dict[tuple[TypeKind, str], FunctionSummary] = {}
-
     @classmethod
     def get(cls, type_kind: TypeKind, method_name: str) -> FunctionSummary | None:
         """Get model for a method."""
         if not cls._models:
             cls._init_models()
         return cls._models.get((type_kind, method_name))
-
     @classmethod
     def _init_models(cls) -> None:
         """Initialize method models."""
@@ -651,7 +630,6 @@ class MethodModels:
         cls._add_list_methods()
         cls._add_dict_methods()
         cls._add_set_methods()
-
     @classmethod
     def _add_str_methods(cls) -> None:
         """Add string method models."""
@@ -837,7 +815,6 @@ class MethodModels:
             is_readonly=True,
             may_raise={"UnicodeEncodeError"},
         )
-
     @classmethod
     def _add_list_methods(cls) -> None:
         """Add list method models."""
@@ -936,7 +913,6 @@ class MethodModels:
             is_pure=True,
             is_readonly=True,
         )
-
     @classmethod
     def _add_dict_methods(cls) -> None:
         """Add dict method models."""
@@ -1027,7 +1003,6 @@ class MethodModels:
             is_pure=True,
             is_readonly=True,
         )
-
     @classmethod
     def _add_set_methods(cls) -> None:
         """Add set method models."""
@@ -1119,14 +1094,10 @@ class MethodModels:
             is_pure=True,
             is_readonly=True,
         )
-
-
 class FunctionSummarizer:
     """Creates and caches function summaries."""
-
     def __init__(self) -> None:
         self.summaries: dict[str, FunctionSummary] = {}
-
     def get_summary(self, name: str) -> FunctionSummary | None:
         """Get summary for a function."""
         if name in self.summaries:
@@ -1136,7 +1107,6 @@ class FunctionSummarizer:
             self.summaries[name] = builtin_summary
             return builtin_summary
         return None
-
     def get_method_summary(
         self,
         type_kind: TypeKind,
@@ -1144,7 +1114,6 @@ class FunctionSummarizer:
     ) -> FunctionSummary | None:
         """Get summary for a method."""
         return MethodModels.get(type_kind, method_name)
-
     def summarize_code(self, code: Any, name: str) -> FunctionSummary:
         """Create summary from code object."""
         summary = FunctionSummary(name=name)
@@ -1183,7 +1152,6 @@ class FunctionSummarizer:
         summary.is_analyzed = True
         self.summaries[name] = summary
         return summary
-
     def _analyze_effects(self, code: Any, summary: FunctionSummary) -> None:
         """Analyze bytecode for effects."""
         instructions = list(dis.get_instructions(code))

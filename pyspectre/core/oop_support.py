@@ -9,18 +9,14 @@ Provides improved class and object handling:
 - Slot handling
 - Class method / static method support
 """
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import (
     TYPE_CHECKING,
     Any,
 )
-
 import z3
-
 if TYPE_CHECKING:
     pass
 from pyspectre.core.object_model import (
@@ -34,24 +30,18 @@ from pyspectre.core.object_model import (
     SymbolicProperty,
 )
 from pyspectre.core.types import SymbolicValue
-
-
 class MethodType(Enum):
     """Types of methods in a class."""
-
     INSTANCE = auto()
     CLASS = auto()
     STATIC = auto()
     PROPERTY = auto()
     ABSTRACT = auto()
-
-
 @dataclass
 class EnhancedMethod:
     """
     Enhanced method representation with type tracking.
     """
-
     func: Any
     method_type: MethodType = MethodType.INSTANCE
     name: str = ""
@@ -61,11 +51,9 @@ class EnhancedMethod:
     parameters: list[str] = field(default_factory=list)
     defaults: dict[str, Any] = field(default_factory=dict)
     annotations: dict[str, str] = field(default_factory=dict)
-
     @property
     def is_bound(self) -> bool:
         return self.bound_to is not None
-
     def bind_to_instance(self, instance: SymbolicObject) -> EnhancedMethod:
         """Bind method to an instance."""
         if self.method_type == MethodType.STATIC:
@@ -83,7 +71,6 @@ class EnhancedMethod:
             defaults=self.defaults,
             annotations=self.annotations,
         )
-
     def bind_to_class(self, cls: SymbolicClass) -> EnhancedMethod:
         """Bind classmethod to a class."""
         return EnhancedMethod(
@@ -97,7 +84,6 @@ class EnhancedMethod:
             defaults=self.defaults,
             annotations=self.annotations,
         )
-
     def get_call_args(
         self,
         args: tuple[Any, ...],
@@ -116,18 +102,14 @@ class EnhancedMethod:
         if self.bound_to and isinstance(self.bound_to, SymbolicObject):
             return (self.bound_to,) + args, kwargs
         return args, kwargs
-
-
 @dataclass
 class InitParameter:
     """Parameter information for __init__."""
-
     name: str
     type_hint: str | None = None
     default: Any = None
     has_default: bool = False
     is_self: bool = False
-
     def to_symbolic(self, pc: int) -> Any:
         """Create a symbolic value for this parameter."""
         if self.is_self:
@@ -145,14 +127,11 @@ class InitParameter:
         if self.has_default:
             return self.default
         return SymbolicValue.symbolic(f"init_{self.name}_{pc}")[0]
-
-
 @dataclass
 class EnhancedClass:
     """
     Enhanced class representation with full OOP support.
     """
-
     base: SymbolicClass
     methods: dict[str, EnhancedMethod] = field(default_factory=dict)
     class_methods: dict[str, EnhancedMethod] = field(default_factory=dict)
@@ -165,19 +144,15 @@ class EnhancedClass:
     is_dataclass: bool = False
     dataclass_fields: dict[str, Any] = field(default_factory=dict)
     abstract_methods: set[str] = field(default_factory=set)
-
     @property
     def name(self) -> str:
         return self.base.name
-
     @property
     def qualname(self) -> str:
         return self.base.qualname
-
     @property
     def is_abstract(self) -> bool:
         return len(self.abstract_methods) > 0
-
     def add_method(
         self,
         name: str,
@@ -205,7 +180,6 @@ class EnhancedClass:
         if method_type == MethodType.ABSTRACT:
             self.abstract_methods.add(name)
         self.base.set_attribute(name, method)
-
     def add_property(
         self,
         name: str,
@@ -221,12 +195,10 @@ class EnhancedClass:
             value=prop,
             is_property=True,
         )
-
     def set_init_params(self, params: list[InitParameter]) -> None:
         """Set __init__ parameter info."""
         self.init_params = params
         self.required_init_args = sum(1 for p in params if not p.has_default and not p.is_self)
-
     def get_method(self, name: str) -> EnhancedMethod | None:
         """Get a method by name."""
         if name in self.methods:
@@ -236,7 +208,6 @@ class EnhancedClass:
         if name in self.static_methods:
             return self.static_methods[name]
         return None
-
     def lookup_method(self, name: str) -> EnhancedMethod | None:
         """Look up method through MRO."""
         method = self.get_method(name)
@@ -247,29 +218,23 @@ class EnhancedClass:
             if attr and attr.is_method:
                 return attr.value
         return None
-
-
 @dataclass
 class EnhancedObject:
     """
     Enhanced object instance with proper attribute tracking.
     """
-
     base: SymbolicObject
     enhanced_class: EnhancedClass
     initialized: bool = False
     init_values: dict[str, Any] = field(default_factory=dict)
     _modified_attrs: set[str] = field(default_factory=set)
     _accessed_attrs: set[str] = field(default_factory=set)
-
     @property
     def id(self) -> ObjectId:
         return self.base.id
-
     @property
     def cls(self) -> SymbolicClass:
         return self.base.cls
-
     def get_attribute(self, name: str) -> tuple[Any, bool]:
         """
         Get attribute with full descriptor protocol.
@@ -298,7 +263,6 @@ class EnhancedObject:
                 return value.bind(self.base), True
             return value, True
         return None, False
-
     def set_attribute(self, name: str, value: Any) -> bool:
         """
         Set attribute with descriptor protocol.
@@ -314,7 +278,6 @@ class EnhancedObject:
                 return False
         self.base.set_attribute(name, value)
         return True
-
     def call_method(
         self,
         name: str,
@@ -337,18 +300,14 @@ class EnhancedObject:
         if callable(value):
             return SymbolicValue.symbolic(f"call_{name}_{self.id}")[0], True
         return None, False
-
-
 class EnhancedClassRegistry:
     """
     Registry for enhanced class definitions.
     Tracks all class definitions encountered during analysis.
     """
-
     def __init__(self):
         self._classes: dict[str, EnhancedClass] = {}
         self._by_code: dict[int, EnhancedClass] = {}
-
     def register_class(
         self,
         name: str,
@@ -366,11 +325,9 @@ class EnhancedClassRegistry:
         enhanced = EnhancedClass(base=base)
         self._classes[name] = enhanced
         return enhanced
-
     def get_class(self, name: str) -> EnhancedClass | None:
         """Get a class by name."""
         return self._classes.get(name)
-
     def register_by_code(
         self,
         code_id: int,
@@ -378,16 +335,12 @@ class EnhancedClassRegistry:
     ) -> None:
         """Register class by code object ID."""
         self._by_code[code_id] = enhanced
-
     def get_by_code(self, code_id: int) -> EnhancedClass | None:
         """Get class by code object ID."""
         return self._by_code.get(code_id)
-
     def list_classes(self) -> list[str]:
         """List all registered class names."""
         return list(self._classes.keys())
-
-
 def create_enhanced_instance(
     enhanced_class: EnhancedClass,
     object_state: ObjectState,
@@ -427,8 +380,6 @@ def create_enhanced_instance(
     instance.init_values = init_values
     instance.initialized = True
     return instance, constraints
-
-
 def extract_init_params(code_obj: Any) -> list[InitParameter]:
     """
     Extract __init__ parameters from a code object.
@@ -453,13 +404,9 @@ def extract_init_params(code_obj: Any) -> list[InitParameter]:
             )
         )
     return params
-
-
 def is_dataclass(cls: EnhancedClass) -> bool:
     """Check if class is a dataclass."""
     return cls.is_dataclass
-
-
 def make_dataclass(
     cls: EnhancedClass,
     fields: dict[str, tuple[str, Any]],
@@ -482,17 +429,13 @@ def make_dataclass(
         )
     cls.set_init_params(params)
     return cls
-
-
 @dataclass
 class EnhancedSuper:
     """
     Enhanced super() implementation.
     """
-
     type_: EnhancedClass
     obj: EnhancedObject | None = None
-
     def get_method(self, name: str) -> EnhancedMethod | None:
         """Get method from parent class."""
         mro = self.type_.base.mro
@@ -509,16 +452,10 @@ class EnhancedSuper:
             if cls == self.type_.base:
                 found_self = True
         return None
-
-
 enhanced_class_registry = EnhancedClassRegistry()
-
-
 def get_enhanced_class(name: str) -> EnhancedClass | None:
     """Get an enhanced class by name."""
     return enhanced_class_registry.get_class(name)
-
-
 def register_enhanced_class(
     name: str,
     bases: tuple[SymbolicClass, ...] = (),

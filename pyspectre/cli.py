@@ -3,17 +3,12 @@ Provides two modes:
 1. Single function analysis: pyspectre file.py -f function_name
 2. Full file/directory scan: pyspectre scan path/to/code
 """
-
 from __future__ import annotations
-
 import argparse
 import sys
 from pathlib import Path
-
 from pyspectre.api import analyze_file
 from pyspectre.reporting.formatters import format_result
-
-
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser with subcommands."""
     parser = argparse.ArgumentParser(
@@ -73,20 +68,36 @@ For more info: https://github.com/pyspectre
     scan_parser.add_argument(
         "--max-paths",
         type=int,
-        default=100,
-        help="Max paths per function (default: 100)",
+        default=1000,
+        help="Max paths per function (default: 1000)",
     )
     scan_parser.add_argument(
         "--timeout",
         type=float,
-        default=30.0,
-        help="Timeout per function in seconds (default: 30)",
+        default=60.0,
+        help="Timeout per function in seconds (default: 60)",
     )
     scan_parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
         help="Verbose output",
+    )
+    scan_parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of worker processes (default: CPU count)",
+    )
+    scan_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Automatically tune configuration based on code complexity",
+    )
+    scan_parser.add_argument(
+        "--reproduce",
+        action="store_true",
+        help="Generate reproduction scripts for detected issues",
     )
     analyze_parser = subparsers.add_parser(
         "analyze",
@@ -142,7 +153,7 @@ For more info: https://github.com/pyspectre
         help="Verbose output",
     )
     parser.add_argument(
-        "file",
+        "legacy_file",
         type=str,
         nargs="?",
         help="(Legacy) Python file to analyze",
@@ -151,6 +162,7 @@ For more info: https://github.com/pyspectre
         "-f",
         "--function",
         type=str,
+        dest="legacy_function",
         help="(Legacy) Function to analyze",
     )
     parser.add_argument(
@@ -180,14 +192,10 @@ For more info: https://github.com/pyspectre
         default=60.0,
     )
     return parser
-
-
 def cmd_scan(args) -> int:
     """Execute scan command."""
     import json
-
     from pyspectre.scanner import scan_directory, scan_file
-
     path = Path(args.path)
     if not path.exists():
         print(f"❌ Error: Path not found: {path}", file=sys.stderr)
@@ -201,11 +209,13 @@ def cmd_scan(args) -> int:
     else:
         pattern = "**/*.py" if args.recursive else "*.py"
         results = scan_directory(
-            path,
+            args.path,
             pattern=pattern,
             verbose=args.verbose,
             max_paths=args.max_paths,
             timeout=args.timeout,
+            workers=args.workers,
+            auto_tune=args.auto,
         )
     total_issues = sum(len(r.issues) for r in results)
     if args.format == "json":
@@ -218,7 +228,6 @@ def cmd_scan(args) -> int:
         output = json.dumps(output_data, indent=2, default=str)
     elif args.format == "sarif":
         from pyspectre.reporting.sarif import SARIFGenerator
-
         generator = SARIFGenerator()
         for r in results:
             for issue in r.issues:
@@ -255,6 +264,28 @@ def cmd_scan(args) -> int:
                         if ce:
                             ce_str = ", ".join(f"{k}={v}" for k, v in ce.items())
                             lines.append(f"       ↳ Trigger: {ce_str}")
+                    if args.reproduce and result.issues:
+                        from pyspectre.reporting.reproduction import ReproductionGenerator
+                        generator = ReproductionGenerator()
+                        lines.append("")
+                        lines.append("    [!] Reproduction Scripts:")
+                        for issue in result.issues:
+                            func = issue.get("function_name", "unknown")
+                            class_name = issue.get("class_name")
+                            src = str(result.file_path)
+                            class IssueWrapper:
+                                def __init__(self, data):
+                                    self.counterexample = data.get("counterexample")
+                                    self.kind = type("Kind", (), {"name": data.get("kind")})
+                                    self.message = data.get("message")
+                                    self.class_name = data.get("class_name")
+                            issue_obj = IssueWrapper(issue)
+                            if issue_obj.counterexample:
+                                script_path = generator.generate(
+                                    issue_obj, func, src, class_name=class_name
+                                )
+                                if script_path:
+                                    lines.append(f"       + {script_path}")
                     lines.append("")
         lines.append("─" * 60)
         output = "\n".join(lines)
@@ -265,8 +296,6 @@ def cmd_scan(args) -> int:
     else:
         print(output)
     return 1 if total_issues > 0 else 0
-
-
 def cmd_analyze(args) -> int:
     """Execute analyze command for single function."""
     filepath = Path(args.file)
@@ -301,8 +330,6 @@ def cmd_analyze(args) -> int:
     except Exception as e:
         print(f"❌ Error: {e}", file=sys.stderr)
         return 1
-
-
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = create_parser()
@@ -311,13 +338,13 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_scan(args)
     elif args.command == "analyze":
         return cmd_analyze(args)
-    if args.file and args.function:
+    if args.legacy_file and args.legacy_function:
         args.command = "analyze"
+        args.file = args.legacy_file
+        args.function = args.legacy_function
         args.args = None
         return cmd_analyze(args)
     parser.print_help()
     return 0
-
-
 if __name__ == "__main__":
     sys.exit(main())

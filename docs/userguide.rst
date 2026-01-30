@@ -1,7 +1,7 @@
 User Guide
 ==========
 
-This guide covers all features of Shadow VM in detail.
+This guide covers all features of PySpectre in detail.
 
 
 Basic Usage
@@ -14,7 +14,7 @@ The main entry point is the ``analyze()`` function:
 
 .. code-block:: python
 
-   from shadow_vm import analyze
+   from pyspectre import analyze
 
    def my_function(x, y):
        # function code
@@ -101,7 +101,7 @@ Filter by issue type:
 
 .. code-block:: python
 
-   from shadow_vm import IssueKind
+   from pyspectre import IssueKind
 
    div_issues = result.get_issues_by_kind(IssueKind.DIVISION_BY_ZERO)
    assert_issues = result.get_issues_by_kind(IssueKind.ASSERTION_ERROR)
@@ -115,7 +115,7 @@ Text Format (Default)
 
 .. code-block:: python
 
-   from shadow_vm import format_result
+   from pyspectre import format_result
 
    text_output = format_result(result, format="text")
    print(text_output)
@@ -150,11 +150,11 @@ Markdown Format
 Convenience Functions
 ---------------------
 
-Shadow VM provides specialized analysis functions:
+PySpectre provides specialized analysis functions:
 
 .. code-block:: python
 
-   from shadow_vm import (
+   from pyspectre import (
        quick_check,
        check_division_by_zero,
        check_assertions,
@@ -177,7 +177,7 @@ Analyze code directly as a string:
 
 .. code-block:: python
 
-   from shadow_vm import analyze_code
+   from pyspectre import analyze_code
 
    code = '''
    def foo(x):
@@ -195,7 +195,7 @@ Basic Usage
 
 .. code-block:: bash
 
-   python -m shadow_vm <file.py> -f <function_name>
+   pyspectre <file.py> -f <function_name>
 
 
 Options
@@ -204,7 +204,7 @@ Options
 .. code-block:: text
 
    -f, --function    Function to analyze (required)
-   --format          Output format: text, json, html, markdown
+   --format          Output format: text, json, html, markdown, sarif
    --args            Parameter types: name=type
    --max-paths       Maximum paths to explore
    --timeout         Timeout in seconds
@@ -221,16 +221,16 @@ Examples
 .. code-block:: bash
 
    # Basic analysis
-   python -m shadow_vm myfile.py -f calculate
+   pyspectre myfile.py -f calculate
 
    # With JSON output
-   python -m shadow_vm myfile.py -f calculate --format json
+   pyspectre myfile.py -f calculate --format json
 
    # Save to file
-   python -m shadow_vm myfile.py -f calculate -o report.json --format json
+   pyspectre myfile.py -f calculate -o report.json --format json
 
    # Specify types
-   python -m shadow_vm myfile.py -f process --args x=int y=str
+   pyspectre myfile.py -f process --args x=int y=str
 
    # Increase path limit
-   python -m shadow_vm myfile.py -f complex_func --max-paths 5000
+   pyspectre myfile.py -f complex_func --max-paths 5000
