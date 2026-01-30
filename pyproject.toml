@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyspectre"
-version = "0.1.0-alpha"
+version = "0.2.0-alpha"
 description = "EDUCATIONAL PURPOSES ONLY: A symbolic execution engine for studying formal verification concepts. Not for production use."
 readme = "README.md"
 license = {text = "MIT"}

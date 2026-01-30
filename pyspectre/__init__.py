@@ -72,7 +72,7 @@ from pyspectre.execution.verified_executor import (
 )
 from pyspectre.reporting.formatters import format_result
 
-__version__ = "0.1.0-alpha"
+__version__ = "0.2.0-alpha"
 __author__ = "PySpectre Team"
 from pyspectre.config import PySpectreConfig, load_config
 from pyspectre.logging import LogLevel, configure_logging, get_logger
